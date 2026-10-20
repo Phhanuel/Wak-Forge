@@ -28,7 +28,8 @@ const (
 	swpFrameChanged      = 0x0020
 	swpShowWindow        = 0x0040
 	swMaximize           = 3
-	swMinimize           = 6
+	swShowMinNoActive    = 7
+	wsExTopmost          = 0x00000008
 	monitorDefaultToNear = 2
 )
 
@@ -121,25 +122,43 @@ func setScanPopup(hwnd uintptr, on, refocus bool) {
 		return
 	}
 	popup.on = false
-	procSetWindowLongW.Call(hwnd, gwlStyle, popup.style)
-	after := hwndNotTopmost
-	if topmost || inOverlay {
-		after = hwndTopmost
-	}
-	s := popup.saved
-	procSetWindowPos.Call(hwnd, after, uintptr(int(s.L)), uintptr(int(s.T)),
-		uintptr(int(s.R-s.L)), uintptr(int(s.B-s.T)), swpFrameChanged|swpNoActivate)
-	if inOverlay {
-		setOpacity(hwnd, overlayAlpha)
-	}
-	if popup.zoomed {
-		procShowWindow.Call(hwnd, swMaximize)
-	}
+	// On rend d'abord la main au jeu, puis on remet la fenêtre à sa taille DERRIÈRE lui, en un seul
+	// déplacement et sans l'activer : elle ne repasse pas au premier plan le temps d'un éclair.
+	// Exception : « Voir la provenance » (refocus faux alors qu'on a le focus) garde l'appli devant.
+	stayFront := !refocus && uintptr(windows.GetForegroundWindow()) == hwnd
 	if refocus && popup.prevFg != 0 {
 		procSetForeground.Call(popup.prevFg)
 	}
-	if popup.iconic {
-		procShowWindow.Call(hwnd, swMinimize)
+	after := hwndNotTopmost
+	if fg := uintptr(windows.GetForegroundWindow()); !stayFront && fg != 0 && fg != hwnd {
+		// juste sous la fenêtre active (le jeu) ; si elle est elle-même « toujours devant »,
+		// se glisser après elle nous laisserait « toujours devant » aussi
+		if ex, _, _ := procGetWindowLongW.Call(fg, gwlExStyle); ex&wsExTopmost == 0 {
+			after = fg
+		}
+	}
+	if topmost || inOverlay {
+		after = hwndTopmost
+	}
+	flags := uintptr(swpFrameChanged)
+	if !stayFront {
+		flags |= swpNoActivate
+	}
+	procSetWindowLongW.Call(hwnd, gwlStyle, popup.style)
+	s := popup.saved
+	procSetWindowPos.Call(hwnd, after, uintptr(int(s.L)), uintptr(int(s.T)),
+		uintptr(int(s.R-s.L)), uintptr(int(s.B-s.T)), flags)
+	if inOverlay {
+		setOpacity(hwnd, overlayAlpha)
+	}
+	switch {
+	case popup.zoomed:
+		procShowWindow.Call(hwnd, swMaximize) // Windows n'a pas d'« agrandir sans activer »
+		if !stayFront && popup.prevFg != 0 {
+			procSetForeground.Call(popup.prevFg)
+		}
+	case popup.iconic && !stayFront:
+		procShowWindow.Call(hwnd, swShowMinNoActive)
 	}
 }
 
