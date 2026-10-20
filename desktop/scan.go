@@ -12,6 +12,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"image"
 	"image/png"
 	"os"
@@ -129,10 +130,17 @@ func startScanHotkey(self uintptr, send func(scanResult)) {
 					break
 				}
 				if msg.Message == wmHotkey && msg.WParam == hotkeyID && busy.CompareAndSwap(false, true) {
+					// capture AVANT d'ouvrir le panneau de scan : sinon il recouvre l'infobulle
+					// (et la capture peut échouer pendant que la fenêtre change de forme)
 					rememberScanOrigin()
+					img, err := captureAroundCursor()
 					send(scanResult{Pending: true})
 					go func() {
-						send(runScan())
+						if err != nil {
+							send(scanResult{Error: "Capture d'écran impossible : " + err.Error()})
+						} else {
+							send(readImage(img))
+						}
 						busy.Store(false)
 					}()
 				}
@@ -213,8 +221,9 @@ func wakfuInFront(self uintptr) bool {
 	return game
 }
 
-// runScan capture la zone autour de la souris puis la lit avec l'OCR de Windows.
-func runScan() scanResult {
+// captureAroundCursor capture la zone autour de la souris. Appelée depuis le fil du raccourci
+// (verrouillé sur un fil Windows) ; un échec ponctuel de GDI est retenté.
+func captureAroundCursor() (*image.RGBA, error) {
 	var pt point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 
@@ -226,13 +235,28 @@ func runScan() scanResult {
 	minX, minY := int(int32(vx)), int(int32(vy))
 	maxX, maxY := minX+int(int32(vw)), minY+int(int32(vh))
 	w, h := int(dpiScale(900)), int(dpiScale(760))
+	if w > maxX-minX {
+		w = maxX - minX
+	}
+	if h > maxY-minY {
+		h = maxY - minY
+	}
 	x := clamp(int(pt.X)-w/2, minX, maxX-w)
 	y := clamp(int(pt.Y)-int(dpiScale(360)), minY, maxY-h)
 
-	img, err := captureScreen(x, y, w, h)
-	if err != nil {
-		return scanResult{Error: "Capture d'écran impossible : " + err.Error()}
+	var err error
+	for try := 0; try < 3; try++ {
+		var img *image.RGBA
+		if img, err = captureScreen(x, y, w, h); err == nil {
+			return img, nil
+		}
+		time.Sleep(40 * time.Millisecond)
 	}
+	return nil, err
+}
+
+// readImage lit le texte de la capture avec l'OCR de Windows.
+func readImage(img *image.RGBA) scanResult {
 	img = upscale2x(img) // le texte des infobulles est petit : l'OCR lit mieux en plus grand
 
 	dir := filepath.Join(os.TempDir(), "WakForge")
@@ -290,26 +314,29 @@ func clamp(v, lo, hi int) int {
 func captureScreen(x, y, w, h int) (*image.RGBA, error) {
 	screen, _, _ := procGetDC.Call(0)
 	if screen == 0 {
-		return nil, syscall.EINVAL
+		return nil, errors.New("écran inaccessible (GetDC)")
 	}
 	defer procReleaseDC.Call(0, screen)
 	mem, _, _ := procCreateCompatibleDC.Call(screen)
 	defer procDeleteDC.Call(mem)
 	bmp, _, _ := procCreateCompatibleBitmap.Call(screen, uintptr(w), uintptr(h))
 	if bmp == 0 {
-		return nil, syscall.ENOMEM
+		return nil, errors.New("mémoire insuffisante (CreateCompatibleBitmap)")
 	}
 	defer procDeleteObject.Call(bmp)
 	old, _, _ := procSelectObject.Call(mem, bmp)
-	procBitBlt.Call(mem, 0, 0, uintptr(w), uintptr(h), screen, uintptr(x), uintptr(y), srcCopy|captureBlt)
+	ok, _, _ := procBitBlt.Call(mem, 0, 0, uintptr(w), uintptr(h), screen, uintptr(x), uintptr(y), srcCopy|captureBlt)
 	procSelectObject.Call(mem, old)
+	if ok == 0 {
+		return nil, errors.New("copie de l'écran refusée (BitBlt)")
+	}
 
 	hdr := bitmapInfoHeader{Width: int32(w), Height: -int32(h), Planes: 1, BitCount: 32}
 	hdr.Size = uint32(unsafe.Sizeof(hdr))
 	buf := make([]byte, w*h*4)
 	r, _, _ := procGetDIBits.Call(mem, bmp, 0, uintptr(h), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&hdr)), dibRGBColors)
 	if r == 0 {
-		return nil, syscall.EINVAL
+		return nil, errors.New("lecture de l'image refusée (GetDIBits)")
 	}
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for i := 0; i < len(buf); i += 4 { // BGRA -> RGBA
