@@ -7,7 +7,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.10.1';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -21,6 +21,7 @@ const native = {
   notify: (t, b) => window.nativeNotify?.(t, b)?.catch?.(() => {}),
   overlay: (on, alpha) => window.nativeOverlay?.(on, alpha)?.catch?.(() => {}),
   scanEnable: on => window.nativeScanEnable?.(on)?.catch?.(() => {}),
+  scanStatus: () => (window.nativeScanStatus ? window.nativeScanStatus().catch(() => null) : Promise.resolve(null)),
 };
 
 /* =================================================================== état */
@@ -812,7 +813,30 @@ $$('.tab').forEach(t => t.addEventListener('click', () => showView(t.dataset.vie
 
 /* =================================================================== réglages */
 
+// Réglages : indique si l'appli PC reconnaît la fenêtre du jeu (pour le scan Ctrl+D)
+let scanStatusTimer = null;
+async function refreshScanStatus() {
+  const el = $('#scanStatus');
+  if (!el || $('#view-settings').hidden || !native.on) { clearInterval(scanStatusTimer); scanStatusTimer = null; return; }
+  const st = await native.scanStatus();
+  if (!st) { el.textContent = ''; return; }
+  if (!st.enabled) { el.textContent = 'Scan désactivé.'; el.className = 'scan-status'; return; }
+  if (!st.exe && !st.title) {
+    el.textContent = 'Passe sur la fenêtre de WAKFU puis reviens ici : l\'appli indiquera si elle reconnaît le jeu.';
+    el.className = 'scan-status';
+    return;
+  }
+  const what = `${st.exe || 'programme inconnu'}${st.title ? ` « ${st.title} »` : ''}`;
+  el.textContent = st.game && st.regFailed
+    ? `Dernière fenêtre active : ${what}, reconnue comme le jeu, mais Windows refuse Ctrl+D : un autre programme l'utilise déjà.`
+    : st.game
+    ? `✓ Dernière fenêtre active : ${what}, reconnue comme le jeu. Ctrl+D y est actif.`
+    : `Dernière fenêtre active : ${what}, ce n'est pas le jeu. Passe sur WAKFU puis reviens vérifier.`;
+  el.className = `scan-status ${st.game && !st.regFailed ? 'ok' : ''}`;
+}
+
 function renderSettings() {
+  if (native.on && !scanStatusTimer) { refreshScanStatus(); scanStatusTimer = setInterval(refreshScanStatus, 1000); }
   const s = state.settings;
   $('#setSound').checked = s.sound;
   $('#setVolume').value = s.volume;

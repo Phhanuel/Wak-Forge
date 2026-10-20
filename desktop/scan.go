@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -115,9 +116,12 @@ func startScanHotkey(self uintptr, send func(scanResult)) {
 			if want && !registered {
 				r, _, _ := procRegisterHotKey.Call(0, hotkeyID, modControl|modNoRepeat, vkD)
 				registered = r != 0
+				hotkeyOK.Store(registered)
+				regFailed.Store(!registered)
 			} else if !want && registered {
 				procUnregisterHotKey.Call(0, hotkeyID)
 				registered = false
+				hotkeyOK.Store(false)
 			}
 			for {
 				r, _, _ := procPeekMessageW.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, pmRemove)
@@ -137,31 +141,75 @@ func startScanHotkey(self uintptr, send func(scanResult)) {
 	}()
 }
 
+// fgInfo décrit la dernière fenêtre (hors Wak'Forge) passée au premier plan : affiché dans Réglages
+// pour vérifier que le jeu est bien reconnu.
+type fgInfo struct {
+	Exe        string `json:"exe"`
+	Path       string `json:"path"`
+	Title      string `json:"title"`
+	Game       bool   `json:"game"`
+	Registered bool   `json:"registered"`
+	RegFailed  bool   `json:"regFailed"`
+	Enabled    bool   `json:"enabled"`
+}
+
+var (
+	lastFgMu  sync.Mutex
+	lastFg    fgInfo
+	hotkeyOK  atomic.Bool
+	regFailed atomic.Bool // Windows a refusé Ctrl+D (déjà pris par un autre programme)
+)
+
+func scanStatus() fgInfo {
+	lastFgMu.Lock()
+	defer lastFgMu.Unlock()
+	st := lastFg
+	st.Registered = hotkeyOK.Load()
+	st.Enabled = scanEnabled.Load()
+	st.RegFailed = regFailed.Load()
+	return st
+}
+
+// isGame dit si un programme et un titre de fenêtre correspondent au client WAKFU.
+// Le client est un programme Java : il tourne sous jre\bin\javaw.exe, dans le dossier
+// d'installation du jeu (par défaut %LOCALAPPDATA%\Ankama\Wakfu). On reconnaît donc
+// le jeu au chemin du programme ; à défaut, à un programme Java dont la fenêtre s'appelle WAKFU.
+func isGame(path, title string) bool {
+	p := strings.ToLower(strings.ReplaceAll(path, "/", `\`))
+	exe := p[strings.LastIndex(p, `\`)+1:]
+	if strings.Contains(p, `\wakfu\`) || strings.Contains(exe, "wakfu") {
+		return true
+	}
+	isJava := exe == "javaw.exe" || exe == "java.exe"
+	return isJava && strings.Contains(strings.ToLower(title), "wakfu")
+}
+
 // wakfuInFront indique si la fenêtre au premier plan est celle du jeu.
 func wakfuInFront(self uintptr) bool {
 	h := windows.GetForegroundWindow()
 	if h == 0 || uintptr(h) == self {
 		return false
 	}
+	path := ""
 	var pid uint32
 	if _, err := windows.GetWindowThreadProcessId(h, &pid); err == nil && pid != 0 {
 		if p, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid); err == nil {
-			buf := make([]uint16, 520)
+			buf := make([]uint16, 1024)
 			n := uint32(len(buf))
 			if windows.QueryFullProcessImageName(p, 0, &buf[0], &n) == nil {
-				exe := strings.ToLower(filepath.Base(windows.UTF16ToString(buf[:n])))
-				windows.CloseHandle(p)
-				if strings.Contains(exe, "wakfu") {
-					return true
-				}
-			} else {
-				windows.CloseHandle(p)
+				path = windows.UTF16ToString(buf[:n])
 			}
+			windows.CloseHandle(p)
 		}
 	}
-	title := make([]uint16, 256)
-	procGetWindowTextW.Call(uintptr(h), uintptr(unsafe.Pointer(&title[0])), uintptr(len(title)))
-	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(windows.UTF16ToString(title))), "WAKFU")
+	tbuf := make([]uint16, 256)
+	procGetWindowTextW.Call(uintptr(h), uintptr(unsafe.Pointer(&tbuf[0])), uintptr(len(tbuf)))
+	title := strings.TrimSpace(windows.UTF16ToString(tbuf))
+	game := isGame(path, title)
+	lastFgMu.Lock()
+	lastFg = fgInfo{Exe: filepath.Base(path), Path: path, Title: title, Game: game}
+	lastFgMu.Unlock()
+	return game
 }
 
 // runScan capture la zone autour de la souris puis la lit avec l'OCR de Windows.

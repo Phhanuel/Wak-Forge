@@ -478,6 +478,7 @@ func main() {
 		w.Dispatch(func() { w.Eval(js) })
 	})
 	_ = w.Bind("nativeScanEnable", func(on bool) { scanEnabled.Store(on) })
+	_ = w.Bind("nativeScanStatus", func() fgInfo { return scanStatus() })
 
 	w.Navigate(fmt.Sprintf("http://127.0.0.1:%d/", port))
 	w.Run()
