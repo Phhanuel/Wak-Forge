@@ -605,7 +605,7 @@ export function renderOverlay() {
         </div>
         <button class="ovl-done" type="button" data-done title="${done ? 'Remettre à zéro' : 'J\'ai tout'}" aria-label="${done ? 'Remettre à zéro' : 'J\'ai tout'}">${done ? '✓' : '○'}</button>
       </li>`;
-    }).join('') || `<li class="ovl-empty">${rows.length ? 'Tout est réuni 🎉' : 'Ajoute des objets dans l\'onglet Craft.'}</li>`}</ul>
+    }).join('') || `<li class="ovl-empty">${rows.length ? 'Tout est réuni 🎉' : (ctx.native?.on ? 'Liste vide : dans WAKFU, survole un objet et appuie sur Ctrl+D pour l\'ajouter.' : 'Ajoute des objets dans l\'onglet Craft.')}</li>`}</ul>
     ${ctx.native?.on ? `<footer class="ovl-foot"><label>Opacité <input type="range" min="40" max="100" step="5" value="${ovlPrefs.opacity}" data-ovl-opacity></label><span data-ovl-opacity-val>${ovlPrefs.opacity} %</span></footer>` : ''}
   </div>`;
   const list = root.querySelector('.ovl-list');
