@@ -1,0 +1,15 @@
+name: Vérification des données
+
+on:
+  pull_request:
+    paths: ['web/data/**', 'web/js/util.js', 'scripts/**']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-data.mjs

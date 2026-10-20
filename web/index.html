@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wak'Forge – Craft & bestiaire Wakfu</title>
+  <meta name="description" content="Wak'Forge : liste de courses de craft, bestiaire et timers d'archimonstres pour Wakfu.">
+  <meta name="theme-color" content="#0f1420">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" type="image/png" href="icons/icon-32.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/config.js"></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" width="36" height="36">
+      <div>
+        <h1>Wak'Forge</h1>
+        <span class="brand-sub">Craft - Bestiaire - Archimonstre</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" class="tab" data-view="craft" aria-selected="true">Craft</button>
+      <button role="tab" class="tab" data-view="monsters" aria-selected="false">Bestiaire</button>
+      <button role="tab" class="tab" data-view="timers" aria-selected="false">Timers <span class="tab-badge" id="readyBadge" hidden>0</span></button>
+      <button role="tab" class="tab" data-view="settings" aria-selected="false">Réglages</button>
+    </nav>
+    <button class="account" id="accountBtn" type="button">
+      <span class="sync-dot" id="syncDot" data-state="local"></span>
+      <span id="accountLabel">Mode local</span>
+    </button>
+  </header>
+
+  <main>
+    <!-- ============ TIMERS ============ -->
+    <section class="view" id="view-timers" hidden>
+      <div class="launcher">
+        <div class="search" id="searchBox">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></svg>
+          <input id="search" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="Nom d'un archimonstre…" aria-label="Nom d'un archimonstre"
+                 role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list">
+          <kbd class="hint">Entrée</kbd>
+          <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+        </div>
+        <label class="offset" title="Le délai repart à l'apparition de l'archimonstre : si tu l'as vu apparaître il y a quelques minutes, indique-le ici">
+          <span>Apparu il y a</span>
+          <input id="offset" type="number" min="0" max="1440" value="0" inputmode="numeric">
+          <span>min</span>
+        </label>
+        <button class="btn primary" id="launchBtn" type="button">Lancer</button>
+      </div>
+
+      <p class="summary" id="summary"></p>
+
+      <div class="group" id="readyGroup" hidden>
+        <h2>Disponibles</h2>
+        <div class="grid" id="readyList"></div>
+      </div>
+      <div class="group" id="runningGroup" hidden>
+        <h2>En attente</h2>
+        <div class="grid" id="runningList"></div>
+      </div>
+
+      <div class="empty" id="emptyState">
+        <img src="icons/icon-192.png" alt="" width="72" height="72">
+        <h2>Aucun timer en cours</h2>
+        <p>Dès qu'un archimonstre apparaît, tape son nom puis <kbd>Entrée</kbd>.<br>
+          <span class="keys"><kbd>↑</kbd> <kbd>↓</kbd> pour choisir une suggestion, <kbd>Tab</kbd> pour compléter, <kbd>/</kbd> pour revenir à la recherche.</span></p>
+      </div>
+    </section>
+
+    <!-- ============ ARTISANAT ============ -->
+    <section class="view" id="view-craft">
+      <p class="loading">Chargement des données du jeu…</p>
+      <div class="view-body" hidden>
+        <div class="launcher">
+          <div class="search">
+            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></svg>
+            <input id="craftSearch" type="text" autocomplete="off" spellcheck="false" placeholder="Objet à fabriquer…" aria-label="Objet à fabriquer">
+            <ul class="suggest" id="craftSuggest" role="listbox" hidden></ul>
+          </div>
+          <label class="offset"><span>Quantité</span><input id="craftQty" type="number" min="1" max="9999" value="1" inputmode="numeric"></label>
+        </div>
+
+        <div class="empty" id="craftEmpty">
+          <h2>Ta liste de courses d'artisanat</h2>
+          <p>Cherche un objet (équipement, ressource raffinée, plat…) puis <kbd>Entrée</kbd>.<br>
+            Wak'Forge calcule toutes les ressources de base à réunir, recettes intermédiaires comprises.</p>
+        </div>
+
+        <div id="craftResults" hidden>
+          <div class="panel">
+            <div class="panel-head"><h2>Objectifs</h2><button class="btn small ghost danger" type="button" id="craftClear">Vider la liste</button></div>
+            <div id="craftTargets" class="targets"></div>
+            <div class="summary-row" id="craftSummary"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Ressources à réunir</h2>
+              <div class="panel-tools">
+                <label class="check"><input type="checkbox" id="craftHideDone"> Masquer ce que j'ai</label>
+                <button class="btn small" type="button" id="craftCopy">Copier la liste</button>
+                <button class="btn small primary" type="button" id="craftOverlay" title="Petite fenêtre qui reste par-dessus le jeu">⧉ Overlay</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table craft-table">
+                <thead><tr><th>Ressource</th><th class="num">Besoin</th><th class="num">J'ai</th><th class="num">Reste</th><th>Où la trouver</th></tr></thead>
+                <tbody id="craftBase"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Étapes de fabrication</h2><span class="muted small">dans l'ordre, composants d'abord</span></div>
+            <ol class="steps" id="craftSteps"></ol>
+          </div>
+        </div>
+        <p class="muted small source" id="craftSource"></p>
+      </div>
+    </section>
+
+    <!-- ============ MONSTRES ============ -->
+    <section class="view" id="view-monsters" hidden>
+      <p class="loading">Chargement des données du jeu…</p>
+      <div class="view-body" hidden>
+        <div class="toolbar">
+          <input id="monsterSearch" type="search" placeholder="Monstre, famille, zone… ou objet (ex. laine de bouftou)" aria-label="Rechercher un monstre">
+          <select id="monsterType" aria-label="Type de monstre">
+            <option value="">Tous</option><option>Monstre</option><option>Dominant</option><option>Archimonstre</option><option>Boss</option><option>Boss ultime</option>
+          </select>
+        </div>
+        <p class="muted small"><span id="monsterCount"></span> · noms officiels du jeu ; la recherche marche aussi avec les noms anglais.</p>
+        <div id="monsterList" class="mlist"></div>
+        <button class="btn more-btn" type="button" id="monsterMore" hidden>Afficher plus</button>
+      </div>
+    </section>
+
+    <!-- ============ RÉGLAGES ============ -->
+    <section class="view" id="view-settings" hidden>
+      <div class="settings">
+        <div class="setting">
+          <div><h3>Son</h3><p>Petite mélodie quand un archimonstre est disponible.</p></div>
+          <div class="setting-ctl">
+            <label class="switch"><input type="checkbox" id="setSound"><span></span></label>
+            <input type="range" id="setVolume" min="0" max="1" step="0.05" aria-label="Volume">
+            <button class="btn small" id="testSound" type="button">Tester</button>
+          </div>
+        </div>
+        <div class="setting" id="notifSetting">
+          <div><h3>Notifications</h3><p id="notifText">Une notification système quand un timer se termine.</p></div>
+          <div class="setting-ctl">
+            <label class="switch"><input type="checkbox" id="setNotify"><span></span></label>
+            <button class="btn small" id="notifPermBtn" type="button" hidden>Autoriser</button>
+          </div>
+        </div>
+        <div class="setting">
+          <div><h3>Alerte « bientôt »</h3><p>Les cartes passent en jaune quand il reste moins de :</p></div>
+          <div class="setting-ctl"><input type="number" id="setSoon" min="0" max="120" class="num-input"> <span>min</span></div>
+        </div>
+        <div class="setting desktop-only" hidden>
+          <div><h3>Scan d'objet <kbd>Ctrl</kbd>+<kbd>D</kbd></h3><p>Dans WAKFU, passe la souris sur un objet pour afficher son infobulle, puis appuie sur Ctrl+D : il est ajouté à ta liste de craft. Le raccourci n'agit que quand le jeu est au premier plan.</p></div>
+          <div class="setting-ctl"><label class="switch"><input type="checkbox" id="setScan"><span></span></label></div>
+        </div>
+        <div class="setting desktop-only" hidden>
+          <div><h3>Toujours au premier plan</h3><p>Garde la fenêtre par-dessus le jeu.</p></div>
+          <div class="setting-ctl"><label class="switch"><input type="checkbox" id="setTopmost"><span></span></label></div>
+        </div>
+        <div class="setting">
+          <div><h3>Sauvegarde</h3><p>Exporte ou importe ta liste et tes timers (accepte aussi l'ancien <code>archimonstres.txt</code>).</p></div>
+          <div class="setting-ctl">
+            <button class="btn small" id="exportBtn" type="button">Exporter</button>
+            <button class="btn small" id="importBtn" type="button">Importer</button>
+            <input type="file" id="importFile" accept=".json,.txt" hidden>
+          </div>
+        </div>
+        <div class="setting block" id="archiPerso">
+          <div class="setting-row">
+            <div><h3>Mes archimonstres</h3><p>Tes durées perso et les archimonstres que tu as ajoutés. Pour changer la durée d'un archi du jeu, ouvre sa fiche dans l'onglet <b>Bestiaire</b>.</p></div>
+            <div class="setting-ctl"><button class="btn small" id="addMonsterBtn" type="button">+ Ajouter</button></div>
+          </div>
+          <div class="table-wrap" id="bestiaryWrap">
+            <table class="table">
+              <thead><tr><th>Archimonstre</th><th>Zone</th><th class="num">Niv.</th><th>Timer</th><th></th></tr></thead>
+              <tbody id="bestiaryBody"></tbody>
+            </table>
+          </div>
+          <p class="empty-small" id="bestiaryEmpty" hidden>Rien pour l'instant : toutes les durées viennent du fichier de données.</p>
+          <p class="callout" id="dataNote" hidden></p>
+          <p class="muted small" id="dataInfo"></p>
+          <p class="muted small source" id="dataSource"></p>
+        </div>
+        <div class="setting danger">
+          <div><h3>Tout effacer</h3><p>Supprime tes timers, durées personnalisées et archimonstres ajoutés.</p></div>
+          <div class="setting-ctl"><button class="btn small danger" id="resetBtn" type="button">Effacer</button></div>
+        </div>
+      </div>
+      <p class="muted small about" id="aboutText"></p>
+    </section>
+    <footer class="site-foot">
+      Wak'Forge est un projet de fan gratuit et communautaire, non affilié à Ankama.
+      WAKFU et ses contenus sont la propriété d'Ankama.
+      · <a href="mentions-legales.html">Mentions légales</a>
+    </footer>
+  </main>
+  <div id="overlay" hidden></div>
+
+  <!-- ============ DIALOGUES ============ -->
+  <dialog id="durationDlg" class="dlg">
+    <form method="dialog">
+      <h2 id="durationTitle">Durée du timer</h2>
+      <p id="durationText"></p>
+      <div class="field-row">
+        <label class="field"><span>Durée</span><input id="durationMin" autocomplete="off" placeholder="ex. 2h, 1h30, 45m"></label>
+        <label class="field"><span>Durée max <em>(optionnel)</em></span><input id="durationMax" autocomplete="off" placeholder="si apparition aléatoire"></label>
+      </div>
+      <p class="hint-line">Formats : <code>2h</code> · <code>1h30</code> · <code>45m</code> · <code>45</code> (minutes) · <code>1:30:00</code> · <code>1j</code></p>
+      <p class="error" id="durationError" hidden></p>
+      <div class="dlg-actions">
+        <button class="btn" value="cancel" type="button" data-close>Annuler</button>
+        <button class="btn primary" value="ok" id="durationOk">Valider</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="monsterDlg" class="dlg">
+    <form method="dialog">
+      <h2 id="monsterTitle">Archimonstre</h2>
+      <label class="field"><span>Nom</span><input id="mName" autocomplete="off" required maxlength="80"></label>
+      <div class="field-row">
+        <label class="field"><span>Durée</span><input id="mMin" autocomplete="off" placeholder="ex. 2h"></label>
+        <label class="field"><span>Durée max <em>(optionnel)</em></span><input id="mMax" autocomplete="off"></label>
+      </div>
+      <div class="field-row three">
+        <label class="field"><span>Famille</span><input id="mFamily" autocomplete="off" maxlength="60"></label>
+        <label class="field"><span>Zone</span><input id="mZone" autocomplete="off" maxlength="80"></label>
+        <label class="field"><span>Niveau</span><input id="mLevel" inputmode="numeric" maxlength="20" autocomplete="off"></label>
+      </div>
+      <p class="hint-line" id="monsterHint"></p>
+      <p class="error" id="monsterError" hidden></p>
+      <div class="dlg-actions">
+        <button class="btn ghost danger" type="button" id="monsterReset" hidden>Rétablir la durée du fichier</button>
+        <span class="spacer"></span>
+        <button class="btn" value="cancel" type="button" data-close>Annuler</button>
+        <button class="btn primary" value="ok">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="itemDlg" class="dlg wide">
+    <div id="itemBody"></div>
+  </dialog>
+
+  <dialog id="accountDlg" class="dlg">
+    <div id="accountBody"></div>
+  </dialog>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>
