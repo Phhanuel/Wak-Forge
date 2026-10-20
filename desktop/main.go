@@ -241,7 +241,7 @@ var topmost bool
 
 func setTopmost(hwnd uintptr, on bool) {
 	topmost = on
-	if inOverlay {
+	if inOverlay || popup.on {
 		return // l'overlay reste au premier plan ; le réglage s'appliquera en le quittant
 	}
 	after := hwndNotTopmost
@@ -266,9 +266,10 @@ const (
 )
 
 var (
-	inOverlay   bool
-	normalRect  rect
-	overlayRect rect
+	inOverlay    bool
+	overlayAlpha = 255
+	normalRect   rect
+	overlayRect  rect
 )
 
 func windowRect(hwnd uintptr) rect {
@@ -295,6 +296,12 @@ func setOpacity(hwnd uintptr, alpha int) {
 }
 
 func setOverlay(hwnd uintptr, on bool, alpha int) {
+	if on {
+		overlayAlpha = alpha
+	}
+	if popup.on {
+		return // le panneau de scan est ouvert : l'overlay sera appliqué en le refermant
+	}
 	if on == inOverlay {
 		if on {
 			setOpacity(hwnd, alpha)
@@ -338,7 +345,7 @@ func attention(hwnd uintptr) {
 	procSetWindowPos.Call(hwnd, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
 	if !topmost && !inOverlay {
 		time.AfterFunc(2500*time.Millisecond, func() {
-			if !topmost && !inOverlay {
+			if !topmost && !inOverlay && !popup.on {
 				procSetWindowPos.Call(hwnd, hwndNotTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate)
 			}
 		})
@@ -473,12 +480,21 @@ func main() {
 	_ = w.Bind("nativeVersion", func() string { return version })
 
 	// scan d'objet (Ctrl+D dans le jeu) : résultat transmis à la page
+	// et petit panneau ouvert tout de suite à côté de la souris (choix de la rareté et de la quantité)
 	startScanHotkey(hwnd, func(r scanResult) {
 		js := "window.wfScan && window.wfScan(" + scanJSON(r) + ")"
-		w.Dispatch(func() { w.Eval(js) })
+		w.Dispatch(func() {
+			if r.Pending {
+				setScanPopup(hwnd, true, false)
+			}
+			w.Eval(js)
+		})
 	})
 	_ = w.Bind("nativeScanEnable", func(on bool) { scanEnabled.Store(on) })
 	_ = w.Bind("nativeScanStatus", func() fgInfo { return scanStatus() })
+	_ = w.Bind("nativeScanPopup", func(on, refocus bool) {
+		w.Dispatch(func() { setScanPopup(hwnd, on, refocus) })
+	})
 
 	w.Navigate(fmt.Sprintf("http://127.0.0.1:%d/", port))
 	w.Run()

@@ -679,13 +679,152 @@ export function matchScan(lines) {
   return best ? byKey.get(best.key) : null;
 }
 
+/* Fenêtre de scan : l'appli PC réduit la fenêtre en un petit panneau à côté de la souris ;
+ * on y montre l'objet lu, on choisit la rareté et la quantité, puis on valide. */
+let pop = null; // { state, versions, sel, qte, closing }
+
+function popRoot() { return $('#scanPop'); }
+
+function closeScanPop({ refocus = true } = {}) {
+  if (!pop) return;
+  pop = null;
+  const root = popRoot();
+  root.hidden = true;
+  root.innerHTML = '';
+  document.body.classList.remove('scan-mode');
+  ctx.native?.scanPopup?.(false, refocus);
+}
+
+function showScanPop(state) {
+  const root = popRoot();
+  pop = Object.assign(pop || { qte: 1, sel: 0 }, state);
+  document.body.classList.add('scan-mode');
+  root.hidden = false;
+  if (!root.dataset.bound) { bindScanPop(root); root.dataset.bound = '1'; }
+  renderScanPop();
+}
+
+function renderScanPop() {
+  const root = popRoot();
+  if (!pop) return;
+  const head = `<header class="sp-head"><b>Scan d'objet</b><button class="ovl-btn" type="button" data-sp-close title="Fermer (Échap)" aria-label="Fermer">✕</button></header>`;
+  if (pop.state === 'loading') {
+    root.innerHTML = `<div class="sp">${head}<div class="sp-msg"><span class="sp-spin"></span>Lecture de l'objet sous la souris…</div></div>`;
+    return;
+  }
+  if (pop.state === 'msg') {
+    root.innerHTML = `<div class="sp">${head}<div class="sp-msg ${pop.kind || ''}">${pop.html}</div>
+      <footer class="sp-foot">${pop.itemId ? '<button class="btn small" type="button" data-sp-item>Voir la provenance</button>' : ''}
+        <button class="btn small primary" type="button" data-sp-close>Fermer</button></footer></div>`;
+    root.querySelector('.sp-foot .primary')?.focus();
+    return;
+  }
+  if (pop.state === 'done') {
+    root.innerHTML = `<div class="sp">${head}<div class="sp-msg ok"><span class="sp-check">✓</span>${pop.html}</div></div>`;
+    return;
+  }
+  // choix
+  const o = pop.versions[pop.sel];
+  const r = mainRecipe(o);
+  const inList = ctx.getCraft().cibles.find(t => t.id === o.id)?.qte || 0;
+  const labels = pop.versions.map(v => rarityName(v.rarete) || 'Commun');
+  const dup = l => labels.filter(x => x === l).length > 1;
+  root.innerHTML = `<div class="sp">${head}
+    <div class="sp-item">${itemIcon(o, { cls: 'big' })}
+      <div class="sp-main"><div class="sp-name">${escapeHtml(o.nom)}</div>
+        <div class="s-meta">${escapeHtml(o.type)} · Niv. ${o.niveau} · ${jobIcon(r.metier, '')} ${escapeHtml(r.metier)} ${r.niveau}</div></div></div>
+    <div class="sp-label">Rareté</div>
+    <div class="sp-rar" role="radiogroup" aria-label="Rareté">${pop.versions.map((v, i) => `<button type="button" role="radio" aria-checked="${i === pop.sel}" data-sp-rar="${i}" class="${RARITY_CLASS[v.rarete] || 'commun'}"><span class="rar-dot ${RARITY_CLASS[v.rarete] || 'commun'}"></span>${escapeHtml(labels[i])}${dup(labels[i]) ? ` · Niv. ${v.niveau}` : ''}</button>`).join('')}</div>
+    <div class="sp-label">Quantité</div>
+    <div class="sp-qty"><div class="stepper"><button type="button" data-sp-step="-1" aria-label="Moins">−</button>
+      <input type="number" min="1" max="9999" value="${pop.qte}" data-sp-qte aria-label="Quantité">
+      <button type="button" data-sp-step="1" aria-label="Plus">+</button></div>
+      ${inList ? `<span class="muted">déjà ${fmtN(inList)} dans la liste</span>` : ''}</div>
+    <footer class="sp-foot"><button class="btn small ghost" type="button" data-sp-close>Annuler</button>
+      <button class="btn small primary" type="button" data-sp-ok>Ajouter à la liste</button></footer>
+  </div>`;
+  const input = root.querySelector('[data-sp-qte]');
+  input.focus();
+  input.select();
+}
+
+function readQte() {
+  const v = Math.floor(+popRoot().querySelector('[data-sp-qte]')?.value);
+  return Math.min(9999, Math.max(1, v || 1));
+}
+
+function confirmScanPop() {
+  if (pop?.state !== 'choose') return;
+  const o = pop.versions[pop.sel];
+  const qte = readQte();
+  addTarget(o, qte);
+  showScanPop({ state: 'done', html: `<b>${fmtN(qte)} × ${escapeHtml(o.nom)}</b> ajouté à la liste.` });
+  setTimeout(() => { if (pop?.state === 'done') closeScanPop(); }, 700);
+}
+
+function bindScanPop(root) {
+  root.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || !pop) return;
+    if (b.matches('[data-sp-close]')) { closeScanPop(); return; }
+    if (b.matches('[data-sp-ok]')) { confirmScanPop(); return; }
+    if (b.matches('[data-sp-item]')) { const id = pop.itemId; closeScanPop({ refocus: false }); openItem(id); return; }
+    if (b.matches('[data-sp-rar]')) { pop.qte = readQte(); pop.sel = +b.dataset.spRar; renderScanPop(); return; }
+    if (b.matches('[data-sp-step]')) {
+      const input = root.querySelector('[data-sp-qte]');
+      const step = +b.dataset.spStep * (e.shiftKey ? 10 : 1);
+      input.value = Math.min(9999, Math.max(1, readQte() + step));
+      pop.qte = +input.value;
+    }
+  });
+  root.addEventListener('input', e => { if (e.target.matches('[data-sp-qte]') && pop) pop.qte = readQte(); });
+  root.addEventListener('keydown', e => {
+    if (!pop) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeScanPop(); return; }
+    if (pop.state !== 'choose') {
+      if (e.key === 'Enter' && pop.state === 'msg' && !e.target.closest('[data-sp-item]')) { e.preventDefault(); closeScanPop(); }
+      return;
+    }
+    if (e.key === 'Enter') { e.preventDefault(); confirmScanPop(); return; }
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && pop.versions.length > 1) {
+      e.preventDefault();
+      pop.qte = readQte();
+      pop.sel = (pop.sel + (e.key === 'ArrowRight' ? 1 : -1) + pop.versions.length) % pop.versions.length;
+      renderScanPop();
+    }
+  });
+  // panneau temporaire : il se referme si on retourne dans le jeu
+  window.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (pop && !document.hasFocus() && pop.state !== 'loading') closeScanPop({ refocus: false });
+    }, 200);
+  });
+}
+
+/** Rareté écrite dans l'infobulle (« Légendaire »…) : sert à présélectionner la bonne version. */
+function guessVersion(versions, lines) {
+  const text = ` ${(lines || []).map(scanKey).join(' ')} `;
+  const i = versions.findIndex(v => {
+    const k = scanKey(rarityName(v.rarete));
+    return k && text.includes(` ${k} `);
+  });
+  return i < 0 ? 0 : i;
+}
+
 export async function handleScan(r) {
   if (!r) return;
-  const tell = (msg, kind, plain) => {
+  // sans le panneau (navigateur ou ancienne appli), on garde les messages habituels
+  const usePop = !!popRoot();
+  const tell = (msg, kind, plain, itemId) => {
+    if (usePop) { showScanPop({ state: 'msg', html: msg, kind, itemId }); return; }
     ctx.toast(msg, kind);
     if (!document.hasFocus()) ctx.native?.notify("Wak'Forge", plain);
   };
-  if (r.pending) { ctx.toast('Scan de l\'objet…'); return; }
+  if (r.pending) {
+    if (usePop) { pop = null; showScanPop({ state: 'loading' }); } else ctx.toast('Scan de l\'objet…');
+    return;
+  }
+  if (usePop && !pop) return; // panneau fermé pendant la lecture
   if (r.error) { tell(escapeHtml(r.error), 'error', r.error); return; }
   try { await loadGamedata(); } catch { tell('Données du jeu indisponibles.', 'error', 'Données du jeu indisponibles.'); return; }
   const found = matchScan(r.lines);
@@ -693,12 +832,21 @@ export async function handleScan(r) {
     tell('Aucun objet reconnu : place la souris sur l\'objet pour afficher son infobulle, puis refais Ctrl+D.', 'warn', 'Aucun objet reconnu sous la souris.');
     return;
   }
-  const craftable = found.filter(o => mainRecipe(o));
+  const craftable = found.filter(o => mainRecipe(o)).sort((a, b) => a.rarete - b.rarete || a.niveau - b.niveau);
   const name = found[0].nom;
+  if (!craftable.length) {
+    tell(`<b>${escapeHtml(name)}</b> ne se fabrique pas.`, 'warn', `${name} ne se fabrique pas.`, found[0].id);
+    if (!usePop) openItem(found[0].id);
+    return;
+  }
+  if (usePop) {
+    showScanPop({ state: 'choose', versions: craftable, sel: guessVersion(craftable, r.lines), qte: 1 });
+    return;
+  }
   if (craftable.length === 1) {
     addTarget(craftable[0], 1);
     if (!document.hasFocus()) ctx.native?.notify("Wak'Forge", `Ajouté à la liste : ${name}`);
-  } else if (craftable.length > 1) {
+  } else {
     // plusieurs versions (raretés) du même nom : on laisse choisir
     ctx.showView?.('craft');
     const input = $('#craftSearch');
@@ -707,8 +855,5 @@ export async function handleScan(r) {
     renderCraftSuggest();
     input.focus();
     tell(`Plusieurs versions de <b>${escapeHtml(name)}</b> : choisis la bonne dans la liste.`, 'warn', `Plusieurs versions de « ${name} » : choisis dans Wak'Forge.`);
-  } else {
-    tell(`<b>${escapeHtml(name)}</b> ne se fabrique pas.`, 'warn', `${name} ne se fabrique pas.`);
-    openItem(found[0].id);
   }
 }

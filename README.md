@@ -17,7 +17,7 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
   - **Appli PC** : la fenêtre passe en petit format, toujours au premier plan, avec une opacité réglable. Le bouton ⤢ la remet en grand.
   - **Chrome / Edge** : une fenêtre flottante (Picture-in-Picture) qui reste au-dessus des autres applis.
   - **Autres navigateurs** : la page passe en vue compacte.
-- **Scan d'objet** (appli PC) : dans WAKFU, passe la souris sur un objet pour afficher son infobulle et appuie sur <kbd>Ctrl</kbd>+<kbd>D</kbd> : l'objet est ajouté à la liste de craft.
+- **Scan d'objet** (appli PC) : dans WAKFU, passe la souris sur un objet pour afficher son infobulle et appuie sur <kbd>Ctrl</kbd>+<kbd>D</kbd> : une petite fenêtre s'ouvre à côté de la souris pour choisir la rareté et la quantité, puis l'objet est ajouté à la liste de craft.
   L'appli fait une capture d'écran autour de la souris et la lit avec la reconnaissance de texte intégrée à Windows. Elle ne lit ni ne modifie le jeu, et rien n'est envoyé sur internet. Le raccourci n'agit que quand le jeu est au premier plan, et peut être désactivé dans Réglages.
 - **Fiche objet** : stats, recette, provenance et « utilisé dans ».
 - **Bestiaire** : ~1 400 monstres (les versions « quête environnementale » sont distinctes) avec leurs noms officiels français, leurs drops, leurs taux, leurs zones et la récolte du trappeur. La recherche fonctionne en français ou en anglais, par monstre, par famille, par zone ou par objet (« laine de bouftou » affiche les bouftous).
