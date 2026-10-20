@@ -129,6 +129,7 @@ func startScanHotkey(self uintptr, send func(scanResult)) {
 					break
 				}
 				if msg.Message == wmHotkey && msg.WParam == hotkeyID && busy.CompareAndSwap(false, true) {
+					rememberScanOrigin()
 					send(scanResult{Pending: true})
 					go func() {
 						send(runScan())
