@@ -8,7 +8,7 @@ Ce qui reste à faire avant (ou après) la mise en ligne publique.
 - [ ] **E-mail de contact** du projet, à ajouter dans `web/mentions-legales.html`.
 - [ ] **Supabase** : créer le projet, lancer `supabase/schema.sql`, remplir `web/js/config.js` (URL + clé publique).
 - [x] **Publication GitHub** : code envoyé sur [Phhanuel/Wak-Forge](https://github.com/Phhanuel/Wak-Forge).
-- [ ] **GitHub Pages** : Settings → Pages → Source : GitHub Actions.
-- [ ] **Première release** de l'exe (tag `v2.10.0`).
+- [x] **GitHub Pages** : site en ligne sur https://phhanuel.github.io/Wak-Forge/.
+- [x] **Première release** de l'exe : `v2.10.0`.
 - [ ] **Quêtes environnementales** : détecter les QE en cours (comme Chachassistant).
 - [ ] *(Peut-être)* **Lien de don** discret (Ko-fi, Tipeee ou GitHub Sponsors). Il faudra alors mettre à jour les mentions légales.
