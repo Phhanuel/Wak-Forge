@@ -566,9 +566,7 @@ body.overlay-mode, body.ovl-pip { overflow: hidden; }
 .ovl-foot input { flex: 1; accent-color: var(--accent); }
 
 /* ---------------- fenêtre de scan (Ctrl+D) */
-body.scan-mode { overflow: hidden; }
-#scanPop { position: fixed; inset: 0; z-index: 100; background: var(--bg); }
-#scanPop[hidden] { display: none; }
+body.scan-win { margin: 0; overflow: hidden; background: var(--bg); }
 .sp { display: flex; flex-direction: column; height: 100vh; color: var(--text); border: 1px solid var(--border-strong); box-sizing: border-box; }
 .sp-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface); flex: none; }
 .sp-head b { font-size: 13px; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }

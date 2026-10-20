@@ -1,14 +1,18 @@
-// Fenêtre de scan : après Ctrl+D, la fenêtre de Wak'Forge devient un petit panneau sans bordure,
-// au premier plan, à côté de la souris. La page y affiche l'objet scanné pour choisir la rareté
-// et la quantité ; en validant (ou en annulant), la fenêtre reprend sa taille et sa place,
-// et le jeu retrouve le focus.
+// Fenêtre de scan : après Ctrl+D, une petite fenêtre séparée (WebView2, page scan.html) s'ouvre
+// à côté de la souris, au premier plan, pour choisir la rareté et la quantité de l'objet scanné.
+// La fenêtre principale ne bouge jamais : l'objet est ajouté à la liste en arrière-plan
+// (ou dans l'overlay s'il est affiché), et le jeu retrouve le focus.
 
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"path/filepath"
 	"sync"
 	"unsafe"
 
+	webview2 "github.com/jchv/go-webview2"
 	"golang.org/x/sys/windows"
 )
 
@@ -17,19 +21,22 @@ var (
 	procGetMonitorInfoW   = user32.NewProc("GetMonitorInfoW")
 	procAttachThreadInput = user32.NewProc("AttachThreadInput")
 	procBringWindowToTop  = user32.NewProc("BringWindowToTop")
+	procSetWindowLongPtrW = user32.NewProc("SetWindowLongPtrW")
+	procCallWindowProcW   = user32.NewProc("CallWindowProcW")
+	procIsWindowVisible   = user32.NewProc("IsWindowVisible")
 )
 
 const (
 	gwlStyle             = ^uintptr(15) // GWL_STYLE (-16)
-	wsCaption            = 0x00C00000
-	wsThickFrame         = 0x00040000
-	wsMinimizeBox        = 0x00020000
-	wsMaximizeBox        = 0x00010000
+	gwlpWndProc          = ^uintptr(3)  // GWLP_WNDPROC (-4)
+	wsPopup              = 0x80000000
+	wsExToolWindow       = 0x00000080
+	wsExTopmost          = 0x00000008
 	swpFrameChanged      = 0x0020
 	swpShowWindow        = 0x0040
-	swMaximize           = 3
-	swShowMinNoActive    = 7
-	wsExTopmost          = 0x00000008
+	swHide               = 0
+	wmClose              = 0x0010
+	wmActivate           = 0x0006
 	monitorDefaultToNear = 2
 )
 
@@ -56,15 +63,85 @@ func rememberScanOrigin() {
 	scanOriginMu.Unlock()
 }
 
-var popup struct {
-	on             bool
-	saved          rect
-	style          uintptr
-	zoomed, iconic bool
-	prevFg         uintptr
+type scanWindow struct {
+	main    webview2.WebView
+	mainWnd uintptr
+	view    webview2.WebView
+	hwnd    uintptr
+	oldProc uintptr
+	prevFg  uintptr
+	closing bool
 }
 
-// popupRect place le panneau à côté du curseur, dans la zone de travail de son écran.
+var theScanWindow *scanWindow // pour la procédure de fenêtre
+
+// newScanWindow crée la fenêtre de scan, cachée. À appeler avant main.Run() : la création
+// de WebView2 fait tourner sa propre boucle de messages.
+func newScanWindow(main webview2.WebView, mainWnd uintptr) *scanWindow {
+	view := webview2.NewWithOptions(webview2.WebViewOptions{
+		DataPath:  filepath.Join(appDataDir(), "WebView2"),
+		AutoFocus: true,
+		WindowOptions: webview2.WindowOptions{
+			Title:  "Wak'Forge – scan",
+			Width:  1, // créée minuscule puis cachée tout de suite
+			Height: 1,
+			IconId: 2,
+		},
+	})
+	if view == nil {
+		return nil
+	}
+	s := &scanWindow{main: main, mainWnd: mainWnd, view: view, hwnd: uintptr(view.Window())}
+	theScanWindow = s
+	procShowWindow.Call(s.hwnd, swHide)
+	// fenêtre sans bordure, hors barre des tâches, toujours devant
+	procSetWindowLongW.Call(s.hwnd, gwlStyle, wsPopup)
+	procSetWindowLongW.Call(s.hwnd, gwlExStyle, wsExToolWindow|wsExTopmost)
+	procSetWindowPos.Call(s.hwnd, hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate|swpFrameChanged)
+	// Alt+F4 ne doit pas détruire la fenêtre (la bibliothèque quitterait l'appli) : on la cache.
+	s.oldProc, _, _ = procSetWindowLongPtrW.Call(s.hwnd, gwlpWndProc, windows.NewCallback(scanWndProc))
+
+	_ = view.Bind("nativeScanAdd", func(id, qte int) {
+		main.Dispatch(func() { main.Eval(fmt.Sprintf("window.wfScanAdd && window.wfScanAdd(%d, %d)", id, qte)) })
+	})
+	_ = view.Bind("nativeScanClose", func() {
+		main.Dispatch(func() { s.close(true) })
+	})
+	_ = view.Bind("nativeScanItem", func(id int) {
+		// « Voir la provenance » : là, on montre volontairement l'appli
+		main.Dispatch(func() {
+			s.close(false)
+			if r, _, _ := procIsIconic.Call(mainWnd); r != 0 {
+				procShowWindow.Call(mainWnd, swRestore)
+			}
+			forceForeground(mainWnd)
+			main.Eval(fmt.Sprintf("window.wfScanItem && window.wfScanItem(%d)", id))
+		})
+	})
+	view.Navigate(fmt.Sprintf("http://127.0.0.1:%d/scan.html", port))
+	procSetForeground.Call(mainWnd) // la création a brièvement activé la fenêtre de scan
+	return s
+}
+
+func scanWndProc(hwnd, msg, wp, lp uintptr) uintptr {
+	s := theScanWindow
+	switch msg {
+	case wmClose:
+		s.close(true)
+		return 0
+	case wmActivate:
+		// clic ailleurs (retour dans le jeu) : la fenêtre se referme
+		if wp&0xFFFF == 0 && !s.closing {
+			if v, _, _ := procIsWindowVisible.Call(hwnd); v != 0 {
+				procShowWindow.Call(hwnd, swHide)
+			}
+		}
+	}
+	r, _, _ := procCallWindowProcW.Call(s.oldProc, hwnd, msg, wp, lp)
+	return r
+}
+
+// popupRect place la fenêtre à côté du curseur, dans la zone de travail de son écran.
 func popupRect(pt point) rect {
 	w, h, gap := int32(dpiScale(400)), int32(dpiScale(370)), int32(dpiScale(28))
 	wa := rect{0, 0, int32(dpiScale(1280)), int32(dpiScale(720))}
@@ -85,81 +162,39 @@ func popupRect(pt point) rect {
 	return rect{L: x, T: y, R: x + w, B: y + h}
 }
 
-// setScanPopup ouvre (on) ou referme le panneau de scan. refocus rend le focus au jeu en le refermant.
-func setScanPopup(hwnd uintptr, on, refocus bool) {
-	if on == popup.on {
-		if on {
-			forceForeground(hwnd)
-		}
-		return
+// open affiche la fenêtre (état « lecture en cours ») à côté de la souris et lui donne le focus.
+func (s *scanWindow) open() {
+	scanOriginMu.Lock()
+	pt, prev := scanOrigin, scanPrevFg
+	scanOriginMu.Unlock()
+	if prev == s.hwnd || prev == s.mainWnd {
+		prev = 0
 	}
-	if on {
-		scanOriginMu.Lock()
-		pt, prev := scanOrigin, scanPrevFg
-		scanOriginMu.Unlock()
-		if prev == hwnd {
-			prev = 0
-		}
-		popup.prevFg = prev
-		r, _, _ := procIsIconic.Call(hwnd)
-		popup.iconic = r != 0
-		z, _, _ := procIsZoomed.Call(hwnd)
-		popup.zoomed = z != 0
-		if popup.iconic || popup.zoomed {
-			procShowWindow.Call(hwnd, swRestore)
-		}
-		popup.saved = windowRect(hwnd)
-		popup.style, _, _ = procGetWindowLongW.Call(hwnd, gwlStyle)
-		procSetWindowLongW.Call(hwnd, gwlStyle, popup.style&^(wsCaption|wsThickFrame|wsMinimizeBox|wsMaximizeBox))
-		if inOverlay {
-			setOpacity(hwnd, 255)
-		}
-		pr := popupRect(pt)
-		procSetWindowPos.Call(hwnd, hwndTopmost, uintptr(int(pr.L)), uintptr(int(pr.T)),
-			uintptr(int(pr.R-pr.L)), uintptr(int(pr.B-pr.T)), swpFrameChanged|swpShowWindow)
-		forceForeground(hwnd)
-		popup.on = true
-		return
+	s.prevFg = prev
+	s.view.Eval(`window.wfPop && window.wfPop({"state":"loading"})`)
+	r := popupRect(pt)
+	procSetWindowPos.Call(s.hwnd, hwndTopmost, uintptr(int(r.L)), uintptr(int(r.T)),
+		uintptr(int(r.R-r.L)), uintptr(int(r.B-r.T)), swpShowWindow)
+	forceForeground(s.hwnd)
+}
+
+// show transmet à la page de scan ce qu'elle doit afficher (objet, raretés, message…).
+func (s *scanWindow) show(state json.RawMessage) {
+	if v, _, _ := procIsWindowVisible.Call(s.hwnd); v == 0 {
+		return // fermée pendant la lecture
 	}
-	popup.on = false
-	// On rend d'abord la main au jeu, puis on remet la fenêtre à sa taille DERRIÈRE lui, en un seul
-	// déplacement et sans l'activer : elle ne repasse pas au premier plan le temps d'un éclair.
-	// Exception : « Voir la provenance » (refocus faux alors qu'on a le focus) garde l'appli devant.
-	stayFront := !refocus && uintptr(windows.GetForegroundWindow()) == hwnd
-	if refocus && popup.prevFg != 0 {
-		procSetForeground.Call(popup.prevFg)
+	s.view.Eval("window.wfPop && window.wfPop(" + string(state) + ")")
+}
+
+// close cache la fenêtre ; refocus rend d'abord le focus au jeu, pour qu'aucune autre fenêtre
+// (Wak'Forge en particulier) ne passe devant entre-temps.
+func (s *scanWindow) close(refocus bool) {
+	s.closing = true
+	if refocus && s.prevFg != 0 {
+		procSetForeground.Call(s.prevFg)
 	}
-	after := hwndNotTopmost
-	if fg := uintptr(windows.GetForegroundWindow()); !stayFront && fg != 0 && fg != hwnd {
-		// juste sous la fenêtre active (le jeu) ; si elle est elle-même « toujours devant »,
-		// se glisser après elle nous laisserait « toujours devant » aussi
-		if ex, _, _ := procGetWindowLongW.Call(fg, gwlExStyle); ex&wsExTopmost == 0 {
-			after = fg
-		}
-	}
-	if topmost || inOverlay {
-		after = hwndTopmost
-	}
-	flags := uintptr(swpFrameChanged)
-	if !stayFront {
-		flags |= swpNoActivate
-	}
-	procSetWindowLongW.Call(hwnd, gwlStyle, popup.style)
-	s := popup.saved
-	procSetWindowPos.Call(hwnd, after, uintptr(int(s.L)), uintptr(int(s.T)),
-		uintptr(int(s.R-s.L)), uintptr(int(s.B-s.T)), flags)
-	if inOverlay {
-		setOpacity(hwnd, overlayAlpha)
-	}
-	switch {
-	case popup.zoomed:
-		procShowWindow.Call(hwnd, swMaximize) // Windows n'a pas d'« agrandir sans activer »
-		if !stayFront && popup.prevFg != 0 {
-			procSetForeground.Call(popup.prevFg)
-		}
-	case popup.iconic && !stayFront:
-		procShowWindow.Call(hwnd, swShowMinNoActive)
-	}
+	procShowWindow.Call(s.hwnd, swHide)
+	s.closing = false
 }
 
 // forceForeground donne le focus à la fenêtre. Windows peut le refuser à une appli en arrière-plan :
