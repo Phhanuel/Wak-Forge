@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 	"unsafe"
@@ -21,21 +22,14 @@ import (
 
 const updatedFlag = "--updated" // passé à la nouvelle version : l'ancienne est en train de se fermer
 
-// Pages de releases acceptées : le dépôt actuel et sa future adresse (organisation wakforge).
-var releasesPages = []string{
-	"https://github.com/Phhanuel/Wak-Forge/releases",
-	"https://github.com/wakforge/wakforge.github.io/releases",
-}
+// Releases acceptées : l'ancien dépôt (Phhanuel/Wak-Forge) et tout dépôt de l'organisation
+// wakforge (WakForge, wakforge.github.io…) ; GitHub redirige les anciennes adresses.
+var releasesRe = regexp.MustCompile(`(?i)^https://github\.com/(phhanuel/wak-forge|wakforge/[a-z0-9._-]+)/releases`)
 
 // fromReleases dit si url est une page (ou, avec sub, un sous-chemin) des releases du projet.
 func fromReleases(url, sub string) bool {
-	u := strings.ToLower(url)
-	for _, p := range releasesPages {
-		if strings.HasPrefix(u, strings.ToLower(p+sub)) {
-			return true
-		}
-	}
-	return false
+	m := releasesRe.FindString(url)
+	return m != "" && strings.HasPrefix(strings.ToLower(url[len(m):]), sub)
 }
 
 var procShellExecuteW = shell32.NewProc("ShellExecuteW")

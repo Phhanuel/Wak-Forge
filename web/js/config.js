@@ -4,5 +4,5 @@
 window.ARCHI_CONFIG = {
   supabaseUrl: '',      // ex. 'https://abcdefgh.supabase.co'
   supabaseAnonKey: '',  // ex. 'eyJhbGciOi...' (Project Settings > API > anon public)
-  siteUrl: '',          // ex. 'https://phhanuel.github.io/Wak-Forge/' (liens des e-mails)
+  siteUrl: '',          // ex. 'https://wakforge.github.io/' (liens des e-mails)
 };
