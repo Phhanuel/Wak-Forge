@@ -1,6 +1,6 @@
 name: Tests
 
-# Calculs de craft (tests/) et fichier des archimonstres, à chaque modification.
+# Calculs de craft (tests/), fichier des archimonstres et test du site dans un navigateur, à chaque modification.
 on:
   push:
     branches: [main]
@@ -16,3 +16,18 @@ jobs:
           node-version: 22
       - run: npm test
       - run: node scripts/check-data.mjs
+
+  # Le site ouvert dans un vrai navigateur, en français et en anglais (scripts/smoke.mjs).
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          python3 -m http.server 8080 --directory web >/dev/null 2>&1 &
+          sleep 2
+          node scripts/smoke.mjs http://127.0.0.1:8080/

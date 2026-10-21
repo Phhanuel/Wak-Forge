@@ -173,7 +173,11 @@
 
   /* ---------------------------------------------------------- génération */
 
-  async function buildGamedata({ log = () => {}, nomsFr = null } = {}) {
+  /**
+   * @param previous  données déjà publiées ({ items, monstres, en }) : si le wiki est injoignable,
+   *                  on garde le bestiaire et les drops qu'elles contiennent au lieu d'échouer.
+   */
+  async function buildGamedata({ log = () => {}, nomsFr = null, previous = null } = {}) {
     const version = (await getJson(`${CDN}/config.json`)).version;
     log(`version du jeu : ${version}`);
     const files = ['items', 'jobsItems', 'itemTypes', 'recipeCategories', 'recipes', 'recipeIngredients',
@@ -268,6 +272,12 @@
       }
     }
 
+    // --- wiki (bestiaire, drops, trappeur) : facultatif si on a les données précédentes
+    const unmatched = new Set();
+    let monsters = new Map();
+    let nbDrops = 0;
+    let wikiOk = true;
+    try {
     // --- index des noms anglais pour relier le wiki
     const upgradeOutputs = new Set();
     for (const o of all.values()) if (o.recettes?.some(r => r.amelioration)) upgradeOutputs.add(o.id);
@@ -282,7 +292,6 @@
     const wikiItems = await cargoAll('Items', 'name,rarity,level', log);
     const wikiInfo = new Map();
     for (const w of wikiItems) if (!wikiInfo.has(norm(w.name))) wikiInfo.set(norm(w.name), w);
-    const unmatched = new Set();
     const resolve = raw => {
       // "Feudora/Legendary" : nom + rareté
       let name = String(raw), wantRarity = null;
@@ -333,7 +342,6 @@
     }
     log(`portraits : ${existing.size} fichiers trouvés`);
 
-    const monsters = new Map();
     for (const m of wMonsters) {
       // nom de page (et non le champ « name ») : distingue « Arachnee » de « Arachnee (Environmental Quest) »
       const nom = String(m.page || m.name).replace(/\s*\(monster\)$/i, '').trim();
@@ -357,7 +365,6 @@
       (m.zones ||= []);
       if (!m.zones.includes(s.location)) m.zones.push(s.location);
     }
-    let nbDrops = 0;
     for (const d of wDrops) {
       if (!d.monster || !d.item) continue;
       const m = mon(d.monster);
@@ -390,6 +397,28 @@
       }
       if (items.length) m.trappeur = { niveau: lvl, items };
     }
+    } catch (e) {
+      if (!previous) throw e;
+      // wiki en panne : on repart du bestiaire et des drops déjà publiés
+      wikiOk = false;
+      log(`⚠ wiki injoignable (${e.message}) : bestiaire et drops repris des données actuelles`);
+      unmatched.clear();
+      monsters = new Map();
+      nbDrops = 0;
+      for (const o of all.values()) {
+        delete o.drops;
+        if (o.recolte) o.recolte = o.recolte.filter(h => h.metier !== 'Trappeur');
+      }
+      for (const p of previous.items || []) {
+        const o = all.get(p.id);
+        if (!o) continue;
+        if (p.drops) { o.drops = p.drops; nbDrops += p.drops.length; }
+        const trap = (p.recolte || []).filter(h => h.metier === 'Trappeur');
+        if (trap.length) (o.recolte ||= []).push(...trap);
+        if (o.recolte && !o.recolte.length) delete o.recolte;
+      }
+      (previous.monstres || []).forEach((m, i) => monsters.set(i, m));
+    }
 
     // --- sortie
     const finalize = o => {
@@ -419,18 +448,20 @@
         version_jeu: version, maj,
         remarque: 'Textes anglais pour la version anglaise du site : tables français -> anglais et effets des équipements par id.',
         types: frToEn(g.itemTypes), metiers: frToEn(g.recipeCategories), sources: frToEn(g.resources),
-        familles: {}, zones: {}, stats: statsEn,
+        familles: wikiOk ? {} : { ...previous.en?.familles }, zones: wikiOk ? {} : { ...previous.en?.zones }, stats: statsEn,
       },
       data_item: { ...meta, sources: [sourceCdn, sourceWiki], nb: items.length, items },
       data_ressource: { ...meta, sources: [sourceCdn, sourceWiki], nb: ressources.length, ressources },
       data_bestiaire: {
         ...meta, sources: [sourceWiki, sourceCdn],
-        remarque: 'Noms des monstres en anglais (le wiki est anglophone) ; les objets sont référencés par leur id (voir data_item / data_ressource).',
+        remarque: wikiOk ? 'Noms des monstres en anglais (le wiki est anglophone) ; les objets sont référencés par leur id (voir data_item / data_ressource).'
+          : previous.remarque || '',
         nb: bestiaire.length, monstres: bestiaire,
       },
-      stats: { unmatched: [...unmatched].slice(0, 200), nbUnmatched: unmatched.size },
+      stats: { unmatched: [...unmatched].slice(0, 200), nbUnmatched: unmatched.size, wikiOk },
     };
-    if (nomsFr) {
+    // sans le wiki, le bestiaire repris est déjà en français
+    if (nomsFr && wikiOk) {
       const t = applyFrenchNames(out, nomsFr);
       log(`noms français : ${t.monstres}/${t.total} monstres`);
     }

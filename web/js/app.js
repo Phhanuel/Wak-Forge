@@ -8,7 +8,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.17.0';
+const APP_VERSION = '2.18.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -909,7 +909,7 @@ function renderSettings() {
   renderJobSettings();
   $('#setLang').value = lang;
   $('#aboutText').innerHTML = `Version ${APP_VERSION}${native.on ? ` · ${tr('appli PC')}` : ''} · `
-    + `${tr('Projet de fan communautaire, non affilié à Ankama')} · <a href="mentions-legales.html">${tr('Mentions légales')}</a>`;
+    + `${tr('Projet de fan communautaire, non affilié à Ankama')} · <a href="mentions-legales.html${isEn ? '#en' : ''}">${tr('Mentions légales')}</a>`;
 }
 
 // niveaux de métier du joueur (Réglages) : la liste de craft s'en sert pour signaler ce qui est hors de portée
@@ -1320,6 +1320,7 @@ function checkSharedHash() {
 
 async function main() {
   translateDom();
+  if (isEn) $$('a[href="mentions-legales.html"]').forEach(a => { a.href = 'mentions-legales.html#en'; });
   initCraft({
     getCraft: () => state.craft,
     lists: craftLists,
