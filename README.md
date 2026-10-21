@@ -24,6 +24,7 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 - **Partager une liste** : le bouton **Partager** copie un lien vers la liste. La personne qui l'ouvre peut l'importer en un clic (dans l'appli PC, colle le lien dans la recherche). Rien n'est envoyé à un serveur : la liste est dans le lien.
 - **Mes métiers** : indique tes niveaux dans **Réglages** (ou clique sur un métier sous les objectifs). Les fabrications et les récoltes au-dessus de ton niveau sont marquées 🔒.
 - **Classement des ressources** : par niveau, par **provenance** (métier de récolte ou famille de monstre) ou par **monstre** (pour farmer plusieurs ressources sur le même), au choix. Le choix s'applique aussi à l'overlay.
+- **English version** : Réglages → Langue (ou `?lang=en` dans l'adresse). Interface, noms des objets et des monstres, types et effets en anglais ; la recherche marche dans les deux langues.
 - **Overlay** : le bouton **⧉ Overlay** de la liste de courses ouvre une version compacte qui reste par-dessus le jeu. On y coche ce qu'on récolte au fur et à mesure (+1, Maj + clic : +10), et tout reste synchronisé avec la liste complète.
   - **Appli PC** : la fenêtre passe en petit format, toujours au premier plan, avec une opacité réglable. Le bouton ⤢ la remet en grand.
   - **Chrome / Edge** : une fenêtre flottante (Picture-in-Picture) qui reste au-dessus des autres applis.

@@ -1,0 +1,11 @@
+{
+  "version_jeu": "",
+  "maj": "",
+  "remarque": "Textes anglais pour la version anglaise du site : tables français -> anglais et effets des équipements par id. Rempli par scripts/fetch-gamedata.mjs.",
+  "types": {},
+  "metiers": {},
+  "sources": {},
+  "familles": {},
+  "zones": {},
+  "stats": {}
+}

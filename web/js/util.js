@@ -1,4 +1,5 @@
 // Fonctions utilitaires partagées (aucune dépendance au DOM, testables avec Node).
+import { t, isEn, locale } from './i18n.js';
 
 /** Minuscules, sans accents, espaces compactés. */
 export function norm(s) {
@@ -70,7 +71,7 @@ export function fmtClock(sec) {
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
   const p = n => String(n).padStart(2, '0');
-  return (j ? `${j}j ` : '') + `${p(h)}:${p(m)}:${p(s)}`;
+  return (j ? `${j}${isEn ? 'd' : 'j'} ` : '') + `${p(h)}:${p(m)}:${p(s)}`;
 }
 
 /** 5400 -> "1h30", 2700 -> "45m", 90 -> "1m30s", 7200 -> "2h" */
@@ -81,7 +82,7 @@ export function fmtShort(sec) {
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
   let out = '';
-  if (j) out += `${j}j`;
+  if (j) out += `${j}${isEn ? 'd' : 'j'}`;
   if (h) out += `${h}h`;
   if (m) out += h ? String(m).padStart(2, '0') : `${m}m`;
   if (s) out += `${s}s`;
@@ -91,7 +92,7 @@ export function fmtShort(sec) {
 /** Durée humaine pour "depuis 3 min". */
 export function fmtAgo(sec) {
   sec = Math.max(0, Math.floor(sec));
-  if (sec < 60) return 'à l\'instant';
+  if (sec < 60) return t('à l\'instant');
   const m = Math.floor(sec / 60);
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60);
@@ -109,9 +110,9 @@ export function whenLabel(ms, now = Date.now()) {
   const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(d) - day(n)) / 86400000);
   if (diff === 0) return hhmm(ms);
-  if (diff === 1) return `demain ${hhmm(ms)}`;
-  if (diff === -1) return `hier ${hhmm(ms)}`;
-  return `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${hhmm(ms)}`;
+  if (diff === 1) return t('demain {h}', { h: hhmm(ms) });
+  if (diff === -1) return t('hier {h}', { h: hhmm(ms) });
+  return `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${hhmm(ms)}`;
 }
 
 export function escapeHtml(s) {
