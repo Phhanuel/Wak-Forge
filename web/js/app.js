@@ -2,12 +2,12 @@ import {
   norm, slug, cleanName, parseDuration, fmtClock, fmtShort, whenLabel, escapeHtml, rankMatches,
 } from './util.js';
 import { createSync } from './sync.js';
-import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, overlayOpen, handleScan } from './craft.js';
+import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, overlayOpen, handleScan, decodeShare } from './craft.js';
 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.15.1';
+const APP_VERSION = '2.16.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -47,6 +47,9 @@ function sanitizeCraft(raw) {
 }
 const craftEmpty = c => !c.cibles.length && !Object.keys(c.stock).length;
 const MAX_LISTES = 20;
+// métiers du jeu (récolte puis artisanat), pour « Mes métiers »
+const JOBS = ['Paysan', 'Forestier', 'Herboriste', 'Mineur', 'Pêcheur', 'Trappeur',
+  'Boulanger', 'Cuisinier', 'Armurier', 'Bijoutier', 'Tailleur', 'Maroquinier', 'Ébéniste', "Maitre d'Armes"];
 const newListId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 function defaultState() {
@@ -60,6 +63,7 @@ function defaultState() {
     listes: [{ id: 'l1', nom: 'Ma liste', craft }],  // toutes les listes de craft
     listeActive: 'l1',
     prix: {},       // id -> prix unitaire en kamas (commun à toutes les listes)
+    metiers: {},    // métier -> niveau du joueur
     settings: defaultSettings(),
     updatedAt: 0,
   };
@@ -108,6 +112,10 @@ function sanitizeState(raw) {
   for (const [id, v] of Object.entries(raw.prix || {})) {
     const n = Math.round(+v);
     if (+id > 0 && n > 0) s.prix[+id] = Math.min(n, 1e10);
+  }
+  for (const [m, v] of Object.entries(raw.metiers || {})) {
+    const n = Math.round(+v);
+    if (JOBS.includes(m) && n > 0) s.metiers[m] = Math.min(n, 300);
   }
   const st = raw.settings || {};
   s.settings = {
@@ -894,9 +902,29 @@ function renderSettings() {
       ? 'Une notification système quand un timer se termine.'
       : 'Une notification système quand un timer se termine (autorisation du navigateur requise).';
   }
+  renderJobSettings();
   $('#aboutText').innerHTML = `Version ${APP_VERSION}${native.on ? ' · appli PC' : ''} · `
     + 'Projet de fan communautaire, non affilié à Ankama · <a href="mentions-legales.html">Mentions légales</a>';
 }
+
+// niveaux de métier du joueur (Réglages) : la liste de craft s'en sert pour signaler ce qui est hors de portée
+function renderJobSettings() {
+  const grid = $('#jobsGrid');
+  if (!grid) return;
+  const focused = document.activeElement?.dataset?.job;
+  grid.innerHTML = JOBS.map(m => `<label class="job-input"><span>${escapeHtml(m)}</span>`
+    + `<input type="number" class="num-input" min="0" max="300" placeholder="—" data-job="${escapeHtml(m)}" value="${state.metiers[m] || ''}"></label>`).join('');
+  if (focused) grid.querySelector(`[data-job="${CSS.escape(focused)}"]`)?.focus();
+}
+$('#jobsGrid').addEventListener('change', e => {
+  const m = e.target.dataset.job;
+  if (!m) return;
+  const n = Math.min(300, Math.max(0, Math.round(+e.target.value) || 0));
+  if (n) state.metiers[m] = n; else delete state.metiers[m];
+  persist();
+  renderJobSettings();
+  renderCraft();
+});
 
 const setSetting = (k, v) => { state.settings[k] = v; persist(); renderSettings(); };
 $('#setSound').addEventListener('change', e => setSetting('sound', e.target.checked));
@@ -976,6 +1004,7 @@ function mergeInto(other) {
   if (!craftEmpty(other.craft)) setActiveCraft(other.craft);
   addMissingLists(other);
   Object.assign(state.prix, other.prix);
+  for (const [m, v] of Object.entries(other.metiers)) state.metiers[m] = Math.max(state.metiers[m] || 0, v);
 }
 
 /** Remplace le contenu de la liste active. */
@@ -996,9 +1025,9 @@ const craftLists = {
     persist();
     return true;
   },
-  create(nom) {
+  create(nom, craft = defaultCraft()) {
     if (state.listes.length >= MAX_LISTES) return false;
-    const l = { id: newListId(), nom: cleanName(nom).slice(0, 40) || 'Nouvelle liste', craft: defaultCraft() };
+    const l = { id: newListId(), nom: cleanName(nom).slice(0, 40) || 'Nouvelle liste', craft };
     state.listes.push(l);
     state.listeActive = l.id; state.craft = l.craft;
     persist();
@@ -1039,9 +1068,9 @@ function addMissingLists(other) {
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Effacer tous tes timers, durées perso et archimonstres ajoutés ?' + (sync.user ? '\nCela s\'applique aussi à ton compte.' : ''))) return;
   const settings = state.settings;
-  const { craft, listes, listeActive, prix } = state;
+  const { craft, listes, listeActive, prix, metiers } = state;
   state = defaultState();
-  Object.assign(state, { settings, craft, listes, listeActive, prix });
+  Object.assign(state, { settings, craft, listes, listeActive, prix, metiers });
   refreshCatalog(); persist(); persistDevice();
   renderTimers(true); renderBestiary();
   toast('Tout a été effacé.');
@@ -1158,6 +1187,7 @@ function applyRemote(remote, merge) {
     if (craftEmpty(state.craft) && !craftEmpty(local.craft)) setActiveCraft(local.craft);
     addMissingLists(local);
     for (const [id, v] of Object.entries(local.prix)) if (!state.prix[id]) state.prix[id] = v;
+    for (const [m, v] of Object.entries(local.metiers)) state.metiers[m] = Math.max(state.metiers[m] || 0, v);
     state.updatedAt = Date.now();
     markPastAsNotified();
     refreshCatalog();
@@ -1195,6 +1225,7 @@ function toastUndo(html, undo) {
 
 // L'appli PC vérifie la dernière release GitHub ; « Mettre à jour » télécharge le nouvel exe,
 // le met à la place de l'ancien et relance l'appli.
+const SITE_URL = 'https://wakforge.github.io/';
 const RELEASES_API = 'https://api.github.com/repos/wakforge/wakforge.github.io/releases/latest';
 const RELEASES_PAGE = 'https://github.com/wakforge/wakforge.github.io/releases/latest';
 const verParts = v => String(v || '').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
@@ -1258,11 +1289,44 @@ function renderGameSource() {
     : '';
 }
 
+/** Importe une liste reçue par lien (#liste=…) comme nouvelle liste, après confirmation. */
+function importShared(text) {
+  const d = decodeShare(text);
+  if (!d) { toast('Ce lien de liste est invalide ou incomplet.', 'error'); return false; }
+  const nom = cleanName(d.nom || '').slice(0, 40) || 'Liste partagée';
+  const n = d.cibles.length;
+  if (!confirm(`Importer la liste partagée « ${nom} » (${n} objet${n > 1 ? 's' : ''}) ?\nElle s'ajoute à tes listes, sans toucher aux autres.`)) return true;
+  if (!craftLists.create(nom, sanitizeCraft({ cibles: d.cibles }))) {
+    toast(`Tu as déjà ${MAX_LISTES} listes : supprimes-en une pour importer celle-ci.`, 'warn');
+    return true;
+  }
+  showView('craft');
+  renderCraft();
+  toast(`Liste <b>${escapeHtml(nom)}</b> importée.`, 'ok');
+  return true;
+}
+function checkSharedHash() {
+  if (!/^#liste=/.test(location.hash)) return;
+  const h = location.hash;
+  history.replaceState(null, '', location.pathname + location.search);
+  importShared(h);
+}
+
 async function main() {
   initCraft({
     getCraft: () => state.craft,
     lists: craftLists,
     prices: () => state.prix,
+    jobs: () => state.metiers,
+    setJob: (m, v) => {
+      const n = Math.min(300, Math.max(0, Math.round(+v) || 0));
+      if (!JOBS.includes(m)) return;
+      if (n) state.metiers[m] = n; else delete state.metiers[m];
+      persist();
+      renderJobSettings();
+    },
+    importShared,
+    shareBase: () => (native.on || location.protocol === 'file:' ? (window.ARCHI_CONFIG?.siteUrl || SITE_URL) : location.origin + location.pathname),
     archiInfo,
     native,
     archiLaunch: launchArchi,
@@ -1281,6 +1345,9 @@ async function main() {
   let v = 'craft';
   try { v = sessionStorage.getItem('archimonstres.view') || 'craft'; } catch { /* rien */ }
   showView($(`#view-${v}`) ? v : 'craft');
+  // lien de partage d'une liste (#liste=…), à l'ouverture ou collé dans la barre d'adresse
+  setTimeout(checkSharedHash, 300);
+  window.addEventListener('hashchange', checkSharedHash);
   setInterval(tick, 250);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
   if (native.on) {

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildIndex, computeList, costIndex, mainRecipe } from '../web/js/craftcore.js';
+import { buildIndex, computeList, costIndex, mainRecipe, encodeShare, decodeShare } from '../web/js/craftcore.js';
 
 // Mini jeu de données : A = 2 B + 1 C (produit 1) ; B = 3 C (produit 2) ; C et D sont des ressources.
 const item = (id, nom, recettes) => ({ id, nom, nom_en: '', niveau: 1, rarete: 0, type: 'Test', ...(recettes ? { recettes } : {}) });
@@ -66,4 +66,14 @@ test('données réelles : chaque recette pointe vers des objets connus', () => {
   assert.ok(missing.length < idx.craftables.length * 0.01, `ingrédients inconnus : ${missing.slice(0, 5).join(', ')}`);
   const res = computeList(idx, [{ id: 2023, qte: 1 }]); // Boufbottes
   assert.ok(res.base.length > 0 && res.crafts.some(x => x.id === 2023));
+});
+
+test('lien de partage : aller-retour et liens invalides', () => {
+  const code = encodeShare('Panoplie « été »', [{ id: 23852, qte: 1 }, { id: 12894, qte: 2 }]);
+  assert.match(code, /^[A-Za-z0-9_-]+$/);
+  const back = decodeShare(`https://wakforge.github.io/#liste=${code}`);
+  assert.deepEqual(back, { nom: 'Panoplie « été »', cibles: [{ id: 23852, qte: 1 }, { id: 12894, qte: 2 }] });
+  assert.deepEqual(decodeShare(code), back, 'le code seul suffit');
+  assert.equal(decodeShare('https://wakforge.github.io/'), null);
+  assert.equal(decodeShare('#liste=pas-du-json-du-tout'), null);
 });

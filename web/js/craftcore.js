@@ -184,3 +184,22 @@ export function costIndex(index, prices = {}) {
   };
   return cost;
 }
+
+/* Lien de partage d'une liste : #liste=<base64url du JSON {v, n, c: [[id, qte]…]}> (rien n'est envoyé à un serveur). */
+const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export function encodeShare(nom, cibles) {
+  const json = JSON.stringify({ v: 1, n: String(nom || '').slice(0, 40), c: cibles.slice(0, 200).map(t => [t.id, t.qte]) });
+  return b64url(new TextEncoder().encode(json));
+}
+/** Décode un lien (ou juste le code) ; renvoie { nom, cibles } ou null. */
+export function decodeShare(text) {
+  const m = String(text || '').match(/(?:#liste=)?([A-Za-z0-9_-]{8,})\s*$/);
+  if (!m) return null;
+  try {
+    const bin = atob(m[1].replace(/-/g, '+').replace(/_/g, '/'));
+    const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0))));
+    if (!data || data.v !== 1 || !Array.isArray(data.c)) return null;
+    const cibles = data.c.map(([id, qte]) => ({ id: Math.floor(+id), qte: Math.floor(+qte) })).filter(t => t.id > 0 && t.qte > 0);
+    return cibles.length ? { nom: typeof data.n === 'string' ? data.n : '', cibles } : null;
+  } catch { return null; }
+}

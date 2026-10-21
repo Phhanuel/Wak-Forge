@@ -8,5 +8,6 @@ Ce qui reste à faire avant (ou après) la mise en ligne publique.
 - [x] **Publication GitHub** : code sur [wakforge/wakforge.github.io](https://github.com/wakforge/wakforge.github.io).
 - [x] **GitHub Pages** : site en ligne sur https://wakforge.github.io/.
 - [x] **Première release** de l'exe : `v2.10.0`.
+- [ ] **Prix partagés entre joueurs** : prix HDV mis en commun (par serveur) via Supabase, avec la date du relevé. Nécessite Supabase (ci-dessus).
 - [ ] **Quêtes environnementales** : détecter les QE en cours (comme Chachassistant).
 - [ ] *(Peut-être)* **Lien de don** discret (Ko-fi, Tipeee ou GitHub Sponsors). Il faudra alors mettre à jour les mentions légales.

@@ -106,13 +106,18 @@
 
         <div id="craftResults" hidden>
           <div class="panel">
-            <div class="panel-head"><h2>Objectifs</h2><button class="btn small ghost danger" type="button" id="craftClear">Vider la liste</button></div>
+            <div class="panel-head"><h2>Objectifs</h2><div class="panel-tools"><button class="btn small" type="button" id="craftShare" title="Copier un lien vers cette liste, à envoyer à quelqu'un">Partager</button><button class="btn small ghost danger" type="button" id="craftClear">Vider la liste</button></div></div>
             <div id="craftTargets" class="targets"></div>
             <div class="summary-row" id="craftSummary"></div>
           </div>
           <div class="panel">
             <div class="panel-head"><h2>Ressources à réunir</h2>
               <div class="panel-tools">
+                <select id="craftGroup" class="select small" aria-label="Classement des ressources" title="Comment ranger les ressources">
+                  <option value="niveau">Par niveau</option>
+                  <option value="provenance">Par provenance</option>
+                  <option value="monstre">Par monstre</option>
+                </select>
                 <label class="check"><input type="checkbox" id="craftHideDone"> Masquer ce que j'ai</label>
                 <button class="btn small" type="button" id="craftCopy">Copier la liste</button>
               </div>
@@ -170,6 +175,10 @@
         <div class="setting">
           <div><h3>Alerte « bientôt »</h3><p>Les cartes passent en jaune quand il reste moins de :</p></div>
           <div class="setting-ctl"><input type="number" id="setSoon" min="0" max="120" class="num-input"> <span>min</span></div>
+        </div>
+        <div class="setting block" id="jobsSetting">
+          <div><h3>Mes métiers</h3><p>Indique tes niveaux : la liste de craft signale les recettes et les récoltes que tu ne peux pas encore faire. Laisse vide si tu ne veux pas t'en servir.</p></div>
+          <div class="jobs-grid" id="jobsGrid"></div>
         </div>
         <div class="setting desktop-only" hidden>
           <div><h3>Scan d'objet <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>F</kbd></h3><p>Dans WAKFU, passe la souris sur un objet pour afficher son infobulle, puis appuie sur <b>Ctrl+D</b> : une petite fenêtre s'ouvre à côté pour choisir la rareté et la quantité avant de l'ajouter à ta liste de craft.<br><b>Ctrl+F</b> sur une ressource de ta liste l'ajoute à « J'ai » (la quantité proposée est ce qu'il manque). Les raccourcis n'agissent que quand le jeu est au premier plan.</p><p class="scan-status" id="scanStatus"></p></div>
