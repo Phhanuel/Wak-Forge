@@ -7,7 +7,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.14.2';
+const APP_VERSION = '2.15.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -1194,8 +1194,8 @@ function toastUndo(html, undo) {
 
 // L'appli PC vérifie la dernière release GitHub ; « Mettre à jour » télécharge le nouvel exe,
 // le met à la place de l'ancien et relance l'appli.
-const RELEASES_API = 'https://api.github.com/repos/Phhanuel/Wak-Forge/releases/latest';
-const RELEASES_PAGE = 'https://github.com/Phhanuel/Wak-Forge/releases/latest';
+const RELEASES_API = 'https://api.github.com/repos/wakforge/wakforge.github.io/releases/latest';
+const RELEASES_PAGE = 'https://github.com/wakforge/wakforge.github.io/releases/latest';
 const verParts = v => String(v || '').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
 function isNewer(a, b) {
   const x = verParts(a), y = verParts(b);

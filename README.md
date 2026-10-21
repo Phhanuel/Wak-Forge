@@ -46,7 +46,7 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 
 | | |
 |---|---|
-| 🌐 **Site** | [phhanuel.github.io/Wak-Forge](https://phhanuel.github.io/Wak-Forge/) |
+| 🌐 **Site** | [wakforge.github.io](https://wakforge.github.io/) |
 | 💻 **Appli Windows** | Télécharge `WakForge.exe` dans [Releases](../../releases) et double-clique dessus. Aucune installation n'est nécessaire. |
 
 > Au premier lancement, Windows SmartScreen peut afficher « Windows a protégé votre ordinateur » parce que l'exe n'est pas signé.
@@ -58,9 +58,9 @@ L'appli PC fonctionne sous Windows 10 et 11. Elle utilise le composant Edge WebV
 
 ## Mettre le projet en ligne (GitHub)
 
-Le dépôt est [Phhanuel/Wak-Forge](https://github.com/Phhanuel/Wak-Forge).
+Le dépôt est [wakforge/wakforge.github.io](https://github.com/wakforge/wakforge.github.io) (anciennement Phhanuel/Wak-Forge).
 
-1. Pour récupérer le code : `git clone https://github.com/Phhanuel/Wak-Forge.git`
+1. Pour récupérer le code : `git clone https://github.com/wakforge/wakforge.github.io.git`
 2. Les modifications envoyées sur `main` mettent le site à jour automatiquement.
 3. Active le site dans **Settings → Pages → Build and deployment → Source : GitHub Actions**.
    Le site se publie automatiquement à chaque modification. Si besoin, relance le workflow « Site » depuis l'onglet **Actions**.
@@ -76,7 +76,7 @@ Pour activer les comptes, on utilise [Supabase](https://supabase.com) (offre gra
 2. Ouvre **SQL Editor → New query**, colle le contenu de [`supabase/schema.sql`](supabase/schema.sql) et clique sur **Run**.
    Ce script crée la table et les règles de sécurité : chaque utilisateur ne voit que ses propres données.
 3. Dans **Authentication → URL Configuration** :
-   - **Site URL** : `https://phhanuel.github.io/Wak-Forge/`
+   - **Site URL** : `https://wakforge.github.io/`
    - **Redirect URLs** : ajoute la même adresse, ainsi que `http://127.0.0.1:47816/` (pour l'appli PC).
 4. Dans **Project Settings → API** (ou **API Keys**), copie l'**URL du projet** et la clé publique (**anon** ou **publishable**).
    Colle-les dans [`web/js/config.js`](web/js/config.js) avec l'adresse du site :
@@ -84,7 +84,7 @@ Pour activer les comptes, on utilise [Supabase](https://supabase.com) (offre gra
    window.ARCHI_CONFIG = {
      supabaseUrl: 'https://abcdefgh.supabase.co',
      supabaseAnonKey: 'eyJhbGciOi…',
-     siteUrl: 'https://phhanuel.github.io/Wak-Forge/',
+     siteUrl: 'https://wakforge.github.io/',
    };
    ```
    Cette clé est **publique par conception**. La sécurité repose sur les règles RLS du script SQL. Ne mets **jamais** la clé `service_role` dans ce fichier.
