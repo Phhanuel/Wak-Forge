@@ -782,13 +782,14 @@ function listComponents() {
   return comp;
 }
 
-function scanChoice(versions, lines, comp) {
+function scanChoice(versions, lines, comp, mode = '') {
   const inList = new Map(ctx.getCraft().cibles.map(t => [t.id, t.qte]));
   let sel = guessVersion(versions, lines);
   if (sel < 0) sel = Math.max(0, versions.findIndex(v => comp.has(v.id)));
   const labels = versions.map(v => rarityName(v.rarete) || 'Commun');
   return {
     state: 'choose',
+    mode,
     sel,
     versions: versions.map((o, i) => {
       const r = mainRecipe(o);
@@ -840,14 +841,28 @@ export async function handleScan(r) {
   }
   const craftable = found.filter(o => mainRecipe(o)).sort((a, b) => a.rarete - b.rarete || a.niveau - b.niveau);
   const name = found[0].nom;
-  if (win) {
-    // une ressource de la liste peut aussi être ajoutée à « j'ai », même si elle ne se fabrique pas
+  if (r.mode === 'have') {
+    // Ctrl+F : la ressource s'ajoute à « j'ai » si elle fait partie de la liste active
     const comp = listComponents();
-    const usable = found.filter(o => mainRecipe(o) || comp.has(o.id)).sort((a, b) => a.rarete - b.rarete || a.niveau - b.niveau);
-    if (usable.length) { ctx.native.scanShow(scanChoice(usable, r.lines, comp)); return; }
+    const usable = found.filter(o => comp.has(o.id)).sort((a, b) => a.rarete - b.rarete || a.niveau - b.niveau);
+    const where = ctx.lists.all().length > 1 ? `ta liste « ${ctx.lists.activeName()} »` : 'ta liste';
+    if (!usable.length) {
+      const target = found.some(o => ctx.getCraft().cibles.some(t => t.id === o.id));
+      tell(target
+        ? `<b>${escapeHtml(name)}</b> est un objectif de ${escapeHtml(where)}, pas une ressource à réunir.`
+        : `<b>${escapeHtml(name)}</b> ne fait pas partie des ressources de ${escapeHtml(where)}. Pour l'ajouter à fabriquer, utilise Ctrl+D.`,
+      'warn', `${name} ne fait pas partie des ressources de ${where}.`, found[0].id);
+      return;
+    }
+    if (win) { ctx.native.scanShow(scanChoice(usable, r.lines, comp, 'have')); return; }
+    const k = comp.get(usable[0].id);
+    window.wfScanHave(usable[0].id, Math.max(1, k.need - k.have));
+    tell(`<b>${escapeHtml(usable[0].nom)}</b> ajouté à « J'ai ».`, 'ok', `${usable[0].nom} ajouté à « J'ai ».`);
+    return;
   }
+  if (win && craftable.length) { ctx.native.scanShow(scanChoice(craftable, r.lines, new Map())); return; }
   if (!craftable.length) {
-    tell(`<b>${escapeHtml(name)}</b> ne se fabrique pas${win ? ' et ne fait pas partie de ta liste' : ''}.`, 'warn', `${name} ne se fabrique pas.`, found[0].id);
+    tell(`<b>${escapeHtml(name)}</b> ne se fabrique pas. Si c'est une ressource de ta liste, utilise Ctrl+F pour l'ajouter à « J'ai ».`, 'warn', `${name} ne se fabrique pas.`, found[0].id);
     if (!win) openItem(found[0].id);
     return;
   }
