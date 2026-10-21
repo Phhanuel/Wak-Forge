@@ -53,13 +53,13 @@
           <input id="search" type="text" autocomplete="off" spellcheck="false"
                  placeholder="Nom d'un archimonstre…" aria-label="Nom d'un archimonstre"
                  role="combobox" aria-expanded="false" aria-controls="suggest" aria-autocomplete="list">
-          <kbd class="hint">Entrée</kbd>
+          <kbd class="hint" data-i18n>Entrée</kbd>
           <ul class="suggest" id="suggest" role="listbox" hidden></ul>
         </div>
         <label class="offset" title="Le délai repart à l'apparition de l'archimonstre : si tu l'as vu apparaître il y a quelques minutes, indique-le ici">
           <span>Apparu il y a</span>
           <input id="offset" type="number" min="0" max="1440" value="0" inputmode="numeric">
-          <span>min</span>
+          <span data-i18n="min (il y a)">min</span>
         </label>
         <button class="btn primary" id="launchBtn" type="button">Lancer</button>
       </div>
@@ -78,7 +78,7 @@
       <div class="empty" id="emptyState">
         <img src="icons/icon-192.png" alt="" width="72" height="72">
         <h2>Aucun timer en cours</h2>
-        <p>Dès qu'un archimonstre apparaît, tape son nom puis <kbd>Entrée</kbd>.<br>
+        <p data-i18n>Dès qu'un archimonstre apparaît, tape son nom puis <kbd>Entrée</kbd>.<br>
           <span class="keys"><kbd>↑</kbd> <kbd>↓</kbd> pour choisir une suggestion, <kbd>Tab</kbd> pour compléter, <kbd>/</kbd> pour revenir à la recherche.</span></p>
       </div>
     </section>
@@ -100,7 +100,7 @@
 
         <div class="empty" id="craftEmpty">
           <h2>Ta liste de courses d'artisanat</h2>
-          <p>Cherche un objet (équipement, ressource raffinée, plat…) puis <kbd>Entrée</kbd>.<br>
+          <p data-i18n>Cherche un objet (équipement, ressource raffinée, plat…) puis <kbd>Entrée</kbd>.<br>
             Wak'Forge calcule toutes les ressources de base à réunir, recettes intermédiaires comprises.</p>
         </div>
 
@@ -145,7 +145,7 @@
         <div class="toolbar">
           <input id="monsterSearch" type="search" placeholder="Monstre, famille, zone… ou objet (ex. laine de bouftou)" aria-label="Rechercher un monstre">
           <select id="monsterType" aria-label="Type de monstre">
-            <option value="">Tous</option><option>Monstre</option><option>Dominant</option><option>Archimonstre</option><option>Boss</option><option>Boss ultime</option>
+            <option value="">Tous</option><option value="Monstre">Monstre</option><option value="Dominant">Dominant</option><option value="Archimonstre">Archimonstre</option><option value="Boss">Boss</option><option value="Boss ultime">Boss ultime</option>
           </select>
         </div>
         <p class="muted small"><span id="monsterCount"></span> · noms officiels du jeu ; la recherche marche aussi avec les noms anglais.</p>
@@ -157,6 +157,10 @@
     <!-- ============ RÉGLAGES ============ -->
     <section class="view" id="view-settings" hidden>
       <div class="settings">
+        <div class="setting">
+          <div><h3>Langue · Language</h3><p>Langue de l'interface et des noms du jeu.</p></div>
+          <div class="setting-ctl"><select id="setLang" class="select small" aria-label="Langue · Language" data-no-i18n><option value="fr">Français</option><option value="en">English</option></select></div>
+        </div>
         <div class="setting">
           <div><h3>Son</h3><p>Petite mélodie quand un archimonstre est disponible.</p></div>
           <div class="setting-ctl">
@@ -181,12 +185,12 @@
           <div class="jobs-grid" id="jobsGrid"></div>
         </div>
         <div class="setting desktop-only" hidden>
-          <div><h3>Scan d'objet <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>F</kbd></h3><p>Dans WAKFU, passe la souris sur un objet pour afficher son infobulle, puis appuie sur <b>Ctrl+D</b> : une petite fenêtre s'ouvre à côté pour choisir la rareté et la quantité avant de l'ajouter à ta liste de craft.<br><b>Ctrl+F</b> sur une ressource de ta liste l'ajoute à « J'ai » (la quantité proposée est ce qu'il manque). Les raccourcis n'agissent que quand le jeu est au premier plan.</p><p class="scan-status" id="scanStatus"></p></div>
+          <div><h3>Scan d'objet <kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>F</kbd></h3><p data-i18n>Dans WAKFU, passe la souris sur un objet pour afficher son infobulle, puis appuie sur <b>Ctrl+D</b> : une petite fenêtre s'ouvre à côté pour choisir la rareté et la quantité avant de l'ajouter à ta liste de craft.<br><b>Ctrl+F</b> sur une ressource de ta liste l'ajoute à « J'ai » (la quantité proposée est ce qu'il manque). Les raccourcis n'agissent que quand le jeu est au premier plan.</p><p class="scan-status" id="scanStatus"></p></div>
           <div class="setting-ctl"><label class="switch"><input type="checkbox" id="setScan"><span></span></label></div>
         </div>
         <div class="setting web-only">
-          <div><h3>Appli Windows</h3><p>Version PC : overlay par-dessus le jeu, scan des objets avec Ctrl+D / Ctrl+F, alertes même fenêtre réduite. Aucune installation : télécharge <code>WakForge.exe</code> et double-clique dessus.</p>
-            <p class="smartscreen"><b>Windows va afficher une alerte</b>, c'est normal : l'exe n'est pas signé (la signature est payante), Windows prévient donc par précaution. Le code est public sur GitHub.<br>
+          <div><h3>Appli Windows</h3><p data-i18n>Version PC : overlay par-dessus le jeu, scan des objets avec Ctrl+D / Ctrl+F, alertes même fenêtre réduite. Aucune installation : télécharge <code>WakForge.exe</code> et double-clique dessus.</p>
+            <p class="smartscreen" data-i18n><b>Windows va afficher une alerte</b>, c'est normal : l'exe n'est pas signé (la signature est payante), Windows prévient donc par précaution. Le code est public sur GitHub.<br>
               · Si le navigateur bloque le téléchargement : <b>⋯ → Conserver</b> (puis « Conserver quand même »).<br>
               · Au lancement, « Windows a protégé votre ordinateur » : <b>Informations complémentaires → Exécuter quand même</b>. Ça ne se fait qu'une fois.</p></div>
           <div class="setting-ctl"><a class="btn small primary" href="https://github.com/wakforge/wakforge.github.io/releases/latest/download/WakForge.exe">Télécharger</a></div>
@@ -196,7 +200,7 @@
           <div class="setting-ctl"><label class="switch"><input type="checkbox" id="setTopmost"><span></span></label></div>
         </div>
         <div class="setting">
-          <div><h3>Sauvegarde</h3><p>Exporte ou importe ta liste et tes timers (accepte aussi l'ancien <code>archimonstres.txt</code>).</p></div>
+          <div><h3>Sauvegarde</h3><p data-i18n>Exporte ou importe ta liste et tes timers (accepte aussi l'ancien <code>archimonstres.txt</code>).</p></div>
           <div class="setting-ctl">
             <button class="btn small" id="exportBtn" type="button">Exporter</button>
             <button class="btn small" id="importBtn" type="button">Importer</button>
@@ -205,7 +209,7 @@
         </div>
         <div class="setting block" id="archiPerso">
           <div class="setting-row">
-            <div><h3>Mes archimonstres</h3><p>Tes durées perso et les archimonstres que tu as ajoutés. Pour changer la durée d'un archi du jeu, ouvre sa fiche dans l'onglet <b>Bestiaire</b>.</p></div>
+            <div><h3>Mes archimonstres</h3><p data-i18n>Tes durées perso et les archimonstres que tu as ajoutés. Pour changer la durée d'un archi du jeu, ouvre sa fiche dans l'onglet <b>Bestiaire</b>.</p></div>
             <div class="setting-ctl"><button class="btn small" id="addMonsterBtn" type="button">+ Ajouter</button></div>
           </div>
           <div class="table-wrap" id="bestiaryWrap">

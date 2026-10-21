@@ -2,9 +2,11 @@
 // et la quantité. Le contenu est préparé par la page principale (craft.js, handleScan) ;
 // l'objet choisi lui est renvoyé par l'appli PC, qui referme la fenêtre et rend le focus au jeu.
 import { escapeHtml } from './util.js';
+import { t, locale, translateDom } from './i18n.js';
 
 const $ = (s, r = document) => r.querySelector(s);
-const fmtN = n => Number(n).toLocaleString('fr-FR');
+const fmtN = n => Number(n).toLocaleString(locale);
+translateDom();
 const root = $('#scanPop');
 const call = (name, ...a) => window[name]?.(...a)?.catch?.(() => {});
 const closeWin = () => { pop = null; call('nativeScanClose'); };
@@ -13,15 +15,15 @@ let pop = null; // { state, versions, sel, qte, … }
 
 function render() {
   if (!pop) { root.innerHTML = ''; return; }
-  const head = `<header class="sp-head"><b>${pop.mode === 'have' ? 'J\'en ai' : 'Scan d\'objet'}</b><button class="ovl-btn" type="button" data-sp-close title="Fermer (Échap)" aria-label="Fermer">✕</button></header>`;
+  const head = `<header class="sp-head"><b>${pop.mode === 'have' ? t('J\'en ai') : t('Scan d\'objet')}</b><button class="ovl-btn" type="button" data-sp-close title="${t('Fermer (Échap)')}" aria-label="${t('Fermer')}">✕</button></header>`;
   if (pop.state === 'loading') {
-    root.innerHTML = `<div class="sp">${head}<div class="sp-msg"><span class="sp-spin"></span>Lecture de l'objet sous la souris…</div></div>`;
+    root.innerHTML = `<div class="sp">${head}<div class="sp-msg"><span class="sp-spin"></span>${t('Lecture de l\'objet sous la souris…')}</div></div>`;
     return;
   }
   if (pop.state === 'msg') {
     root.innerHTML = `<div class="sp">${head}<div class="sp-msg ${escapeHtml(pop.kind || '')}">${pop.html}</div>
-      <footer class="sp-foot">${pop.itemId ? '<button class="btn small" type="button" data-sp-item>Voir la provenance</button>' : ''}
-        <button class="btn small primary" type="button" data-sp-close>Fermer</button></footer></div>`;
+      <footer class="sp-foot">${pop.itemId ? `<button class="btn small" type="button" data-sp-item>${t('Voir la provenance')}</button>` : ''}
+        <button class="btn small primary" type="button" data-sp-close>${t('Fermer')}</button></footer></div>`;
     root.querySelector('.sp-foot .primary')?.focus();
     return;
   }
@@ -33,18 +35,18 @@ function render() {
   root.innerHTML = `<div class="sp">${head}
     <div class="sp-item">${o.icon}
       <div class="sp-main"><div class="sp-name">${escapeHtml(o.nom)}</div><div class="s-meta">${o.meta}</div></div></div>
-    <div class="sp-label">Rareté</div>
-    <div class="sp-rar" role="radiogroup" aria-label="Rareté">${pop.versions.map((v, i) => `<button type="button" role="radio" aria-checked="${i === pop.sel}" data-sp-rar="${i}"><span class="rar-dot ${escapeHtml(v.cls)}"></span>${escapeHtml(v.label)}</button>`).join('')}</div>
-    <div class="sp-label">Quantité</div>
-    <div class="sp-qty"><div class="stepper"><button type="button" data-sp-step="-1" aria-label="Moins">−</button>
-      <input type="number" min="1" max="9999" value="${pop.qte}" data-sp-qte aria-label="Quantité">
-      <button type="button" data-sp-step="1" aria-label="Plus">+</button></div>
-      ${pop.mode === 'have' && o.comp ? `<span class="muted">besoin ${fmtN(o.comp.need)} · j'ai ${fmtN(o.comp.have)}</span>`
-        : o.inList ? `<span class="muted">déjà ${fmtN(o.inList)} dans la liste</span>` : ''}</div>
-    <footer class="sp-foot"><button class="btn small ghost" type="button" data-sp-close>Annuler</button>
+    <div class="sp-label">${t('Rareté')}</div>
+    <div class="sp-rar" role="radiogroup" aria-label="${t('Rareté')}">${pop.versions.map((v, i) => `<button type="button" role="radio" aria-checked="${i === pop.sel}" data-sp-rar="${i}"><span class="rar-dot ${escapeHtml(v.cls)}"></span>${escapeHtml(v.label)}</button>`).join('')}</div>
+    <div class="sp-label">${t('Quantité')}</div>
+    <div class="sp-qty"><div class="stepper"><button type="button" data-sp-step="-1" aria-label="${t('Moins')}">−</button>
+      <input type="number" min="1" max="9999" value="${pop.qte}" data-sp-qte aria-label="${t('Quantité')}">
+      <button type="button" data-sp-step="1" aria-label="${t('Plus')}">+</button></div>
+      ${pop.mode === 'have' && o.comp ? `<span class="muted">${t('besoin {a} · j\'ai {b}', { a: fmtN(o.comp.need), b: fmtN(o.comp.have) })}</span>`
+        : o.inList ? `<span class="muted">${t('déjà {n} dans la liste', { n: fmtN(o.inList) })}</span>` : ''}</div>
+    <footer class="sp-foot"><button class="btn small ghost" type="button" data-sp-close>${t('Annuler')}</button>
       ${pop.mode === 'have'
-        ? '<button class="btn small primary" type="button" data-sp-have title="Ajouter cette quantité à « J\'ai » dans la liste">Ajouter à « J\'ai »</button>'
-        : '<button class="btn small primary" type="button" data-sp-ok>Ajouter à la liste</button>'}</footer>
+        ? `<button class="btn small primary" type="button" data-sp-have title="${t('Ajouter cette quantité à « J\'ai » dans la liste')}">${t('Ajouter à « J\'ai »')}</button>`
+        : `<button class="btn small primary" type="button" data-sp-ok>${t('Ajouter à la liste')}</button>`}</footer>
   </div>`;
   const input = root.querySelector('[data-sp-qte]');
   input.focus();
@@ -66,7 +68,7 @@ function confirm(have = pop?.mode === 'have') {
   if (have ? !o.comp : !o.craftable) return;
   const qte = readQte();
   call(have ? 'nativeScanHave' : 'nativeScanAdd', o.id, qte);
-  pop = { state: 'done', html: have ? `<b>+${fmtN(qte)} ${escapeHtml(o.nom)}</b> dans « j'ai ».` : `<b>${fmtN(qte)} × ${escapeHtml(o.nom)}</b> ajouté à la liste.` };
+  pop = { state: 'done', html: have ? t('<b>+{n} {nom}</b> dans « j\'ai ».', { n: fmtN(qte), nom: escapeHtml(o.nom) }) : t('<b>{n} × {nom}</b> ajouté à la liste.', { n: fmtN(qte), nom: escapeHtml(o.nom) }) };
   render();
   setTimeout(() => { if (pop?.state === 'done') closeWin(); }, 600);
 }

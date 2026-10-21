@@ -2,12 +2,13 @@ import {
   norm, slug, cleanName, parseDuration, fmtClock, fmtShort, whenLabel, escapeHtml, rankMatches,
 } from './util.js';
 import { createSync } from './sync.js';
+import { t as tr, tn, isEn, lang, setLang, translateDom, jobName } from './i18n.js';
 import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, overlayOpen, handleScan, decodeShare } from './craft.js';
 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.16.0';
+const APP_VERSION = '2.17.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -60,7 +61,7 @@ function defaultState() {
     overrides: {},  // id -> { min, max }                               durées perso pour ceux du fichier
     timers: {},     // id -> { name, start, min, max }                  ms / secondes
     craft,          // liste de craft active (même objet que son entrée dans « listes »)
-    listes: [{ id: 'l1', nom: 'Ma liste', craft }],  // toutes les listes de craft
+    listes: [{ id: 'l1', nom: tr('Ma liste'), craft }],  // toutes les listes de craft
     listeActive: 'l1',
     prix: {},       // id -> prix unitaire en kamas (commun à toutes les listes)
     metiers: {},    // métier -> niveau du joueur
@@ -80,7 +81,7 @@ function sanitizeListes(s, raw) {
     s.listes.push({ id, nom: cleanName(String(l.nom || '')).slice(0, 40) || 'Liste', craft: sanitizeCraft(l.craft) });
   }
   let act = s.listes.find(l => l.id === raw.listeActive) || s.listes[0];
-  if (!act) { act = { id: 'l1', nom: 'Ma liste', craft: null }; s.listes.push(act); }
+  if (!act) { act = { id: 'l1', nom: tr('Ma liste'), craft: null }; s.listes.push(act); }
   if (raw.craft || !act.craft) act.craft = sanitizeCraft(raw.craft);
   s.craft = act.craft;
   s.listeActive = act.id;
@@ -182,7 +183,7 @@ async function loadData() {
     dataFile = await res.json();
   } catch (e) {
     console.warn('data_archimonstre.json illisible', e);
-    toast('Fichier de données introuvable : seule ta liste perso est disponible.', 'warn');
+    toast(tr('Fichier de données introuvable : seule ta liste perso est disponible.'), 'warn');
   }
   const seen = new Set();
   dataMonsters = [];
@@ -192,8 +193,10 @@ async function loadData() {
     const id = slug(name);
     if (seen.has(id)) continue;
     seen.add(id);
+    const nameEn = cleanName(m.nom_en || '');
     dataMonsters.push({
-      id, name,
+      // l'id reste tiré du nom français (timers et durées perso enregistrés) ; le nom affiché suit la langue
+      id, name: isEn && nameEn ? nameEn : name, otherName: isEn ? name : nameEn,
       family: cleanName(m.famille || m.family || ''),
       zone: cleanName(m.zone || ''),
       level: parseLevel(m.niveau),
@@ -215,9 +218,9 @@ function parseLevel(v) {
 /** Mode d'apparition lisible pour les archimonstres sans timer. */
 function spawnLabel(m) {
   switch (m.apparition) {
-    case 'donjon': return 'Donjon';
-    case 'challenge': return m.challenge ? `Challenge ${cleanName(m.challenge)}` : 'Challenge';
-    case 'stele': return 'Stèle de Moon';
+    case 'donjon': return tr('Donjon');
+    case 'challenge': return m.challenge ? `${tr('Challenge')} ${cleanName(m.challenge)}` : tr('Challenge');
+    case 'stele': return tr('Stèle de Moon');
     default: return '';
   }
 }
@@ -241,7 +244,7 @@ function catalog() {
   const list = [...map.values()];
   for (const m of list) {
     m._key = norm(m.name);
-    m._extra = norm(`${m.family} ${m.zone}`);
+    m._extra = norm(`${m.family} ${m.zone} ${m.otherName || ''}`);
   }
   list.sort((a, b) => a._key.localeCompare(b._key));
   return list;
@@ -269,7 +272,7 @@ function startTimer(m, offsetMin = 0) {
   persistDevice();
   renderTimers(true);
   const at = whenLabel(t.start + t.min * 1000);
-  toast(`<b>${escapeHtml(m.name)}</b> lancé · prochaine apparition dès ${at}`, 'ok');
+  toast(tr('<b>{nom}</b> lancé · prochaine apparition dès {at}', { nom: escapeHtml(m.name), at }), 'ok');
 }
 
 function removeTimer(id) {
@@ -279,7 +282,7 @@ function removeTimer(id) {
   persist();
   persistDevice();
   renderTimers(true);
-  toastUndo(`${escapeHtml(t.name)} retiré.`, () => {
+  toastUndo(tr('{nom} retiré.', { nom: escapeHtml(t.name) }), () => {
     state.timers[id] = t;
     persist();
     renderTimers(true);
@@ -299,7 +302,7 @@ function scheduleNative() {
   for (const [id, t] of Object.entries(state.timers)) {
     const at = t.start + t.min * 1000;
     if (at <= now) continue;
-    const title = t.max && t.max > t.min ? `${t.name} peut apparaître` : `${t.name} est disponible !`;
+    const title = t.max && t.max > t.min ? tr('{nom} peut apparaître', { nom: t.name }) : tr('{nom} est disponible !', { nom: t.name });
     items.push({ id: notifKey(id, t), title, at });
   }
   native.schedule(items, !!state.settings.sound);
@@ -343,7 +346,7 @@ function playChime() {
 }
 
 function alertTimer(id, t, phase) {
-  const title = phase === 'window' ? `${t.name} peut apparaître` : `${t.name} est disponible !`;
+  const title = phase === 'window' ? tr('{nom} peut apparaître', { nom: t.name }) : tr('{nom} est disponible !', { nom: t.name });
   toast(`⚔ <b>${escapeHtml(title)}</b>`, 'ok', 8000);
   const card = $(`.card[data-id="${CSS.escape(id)}"]`);
   card?.classList.add('flash');
@@ -383,7 +386,7 @@ function sortedTimers(now) {
 function metaLine(id) {
   const m = byId(id);
   if (!m) return '';
-  return [m.family, m.zone, m.level ? `Niv. ${m.level}` : ''].filter(Boolean).join(' · ');
+  return [m.family, m.zone, m.level ? tr('Niv. {n}', { n: m.level }) : ''].filter(Boolean).join(' · ');
 }
 
 function cardHtml(x) {
@@ -392,8 +395,8 @@ function cardHtml(x) {
       ${archiPortrait(byId(x.id) || { name: x.t.name }, 96, 'card-pic')}
       <h3>${escapeHtml(x.t.name)}</h3>
       <div class="actions">
-        <button class="icon-btn" data-act="restart" title="Relancer" aria-label="Relancer ${escapeHtml(x.t.name)}">${ICON.restart}</button>
-        <button class="icon-btn del" data-act="remove" title="Retirer" aria-label="Retirer ${escapeHtml(x.t.name)}">${ICON.remove}</button>
+        <button class="icon-btn" data-act="restart" title="${tr('Relancer')}" aria-label="${tr('Relancer')} ${escapeHtml(x.t.name)}">${ICON.restart}</button>
+        <button class="icon-btn del" data-act="remove" title="${tr('Retirer')}" aria-label="${tr('Retirer')} ${escapeHtml(x.t.name)}">${ICON.remove}</button>
       </div>
     </div>
     <p class="meta">${escapeHtml(metaLine(x.id))}</p>
@@ -419,13 +422,13 @@ function renderTimers(force = false) {
     $('#runningGroup').hidden = !waiting.length;
     $('#emptyState').hidden = items.length > 0;
     const parts = [];
-    if (waiting.length) parts.push(`${waiting.length} en attente`);
-    if (done.length) parts.push(`${done.length} disponible${done.length > 1 ? 's' : ''}`);
+    if (waiting.length) parts.push(tr('{n} en attente', { n: waiting.length }));
+    if (done.length) parts.push(tn(done.length, '{n} disponible', '{n} disponibles'));
     $('#summary').textContent = parts.join(' · ');
     const badge = $('#readyBadge');
     badge.hidden = !done.length;
     badge.textContent = done.length;
-    document.title = (done.length ? `(${done.length}) ` : '') + "Wak'Forge – Craft & bestiaire Wakfu";
+    document.title = (done.length ? `(${done.length}) ` : '') + tr("Wak'Forge – Craft & bestiaire Wakfu");
   }
   updateCardValues(items, now);
 }
@@ -441,22 +444,22 @@ function updateCardValues(items, now) {
     let label, time, pct, when;
     if (x.phase === 'ready') {
       const since = x.maxEnd || x.minEnd;
-      label = 'Disponible depuis';
+      label = tr('Disponible depuis');
       time = fmtClock((now - since) / 1000);
       pct = 100;
-      when = `depuis ${whenLabel(since, now)}`;
+      when = tr('depuis {h}', { h: whenLabel(since, now) });
     } else if (x.phase === 'window') {
-      label = 'Peut apparaître · max dans';
+      label = tr('Peut apparaître · max dans');
       time = fmtClock((x.maxEnd - now) / 1000);
       pct = ((now - x.minEnd) / (x.maxEnd - x.minEnd)) * 100;
-      when = `au plus tard ${whenLabel(x.maxEnd, now)}`;
+      when = tr('au plus tard {h}', { h: whenLabel(x.maxEnd, now) });
     } else {
-      label = x.phase === 'soon' ? 'Bientôt' : 'Restant';
+      label = x.phase === 'soon' ? tr('Bientôt') : tr('Restant');
       time = fmtClock((x.minEnd - now) / 1000);
       pct = ((now - x.t.start) / (x.minEnd - x.t.start)) * 100;
       when = x.maxEnd
-        ? `entre ${whenLabel(x.minEnd, now)} et ${whenLabel(x.maxEnd, now)}`
-        : `dispo dès ${whenLabel(x.minEnd, now)}`;
+        ? tr('entre {a} et {b}', { a: whenLabel(x.minEnd, now), b: whenLabel(x.maxEnd, now) })
+        : tr('dispo dès {h}', { h: whenLabel(x.minEnd, now) });
     }
     setText(card.querySelector('.label'), label);
     setText(card.querySelector('.time'), time);
@@ -512,18 +515,18 @@ function renderSuggest() {
   const exact = suggestions.some(m => m._key === norm(q));
   const items = suggestions.map((m, i) => {
     const running = state.timers[m.id];
-    const chip = running ? '<span class="chip running">en cours</span>'
+    const chip = running ? `<span class="chip running">${tr('en cours')}</span>`
       : m.min ? `<span class="chip">${escapeHtml(fmtShort(m.min))}${m.max ? '–' + escapeHtml(fmtShort(m.max)) : ''}</span>`
         : m.spawn ? `<span class="chip spawn">${escapeHtml(m.spawn)}</span>`
-          : '<span class="chip unknown">durée ?</span>';
-    const meta = [m.family, m.zone, m.level ? `Niv. ${m.level}` : ''].filter(Boolean).join(' · ');
+          : `<span class="chip unknown">${tr('durée ?')}</span>`;
+    const meta = [m.family, m.zone, m.level ? tr('Niv. {n}', { n: m.level }) : ''].filter(Boolean).join(' · ');
     return `<li role="option" id="sg-${i}" data-i="${i}" aria-selected="${i === activeIdx}">
       ${archiPortrait(m, 64, 'sugg-pic')}<div class="s-main"><div class="s-name">${highlight(m.name, q)}</div>${meta ? `<div class="s-meta">${escapeHtml(meta)}</div>` : ''}</div>${chip}</li>`;
   });
   if (cleanName(q) && !exact) {
     items.push(`<li role="option" data-i="new" aria-selected="${activeIdx === suggestions.length}">
-      <div class="s-main"><div class="s-name s-new">+ Ajouter « ${escapeHtml(cleanName(q))} »</div>
-      <div class="s-meta">Nouvel archimonstre, on te demandera sa durée</div></div></li>`);
+      <div class="s-main"><div class="s-name s-new">${tr('+ Ajouter « {nom} »', { nom: escapeHtml(cleanName(q)) })}</div>
+      <div class="s-meta">${tr('Nouvel archimonstre, on te demandera sa durée')}</div></div></li>`);
   }
   suggest.innerHTML = items.join('');
   const open = items.length > 0 && document.activeElement === search;
@@ -580,8 +583,8 @@ async function launchFromSearch() {
 
   if (!m) {
     const d = await askDuration({
-      title: 'Nouvel archimonstre',
-      text: `« ${text} » n'est pas encore dans la liste. Quelle est la durée de son timer ?`,
+      title: tr('Nouvel archimonstre'),
+      text: tr('« {nom} » n\'est pas encore dans la liste. Quelle est la durée de son timer ?', { nom: text }),
     });
     if (!d) { search.focus(); return; }
     const id = slug(text);
@@ -605,8 +608,8 @@ async function launchFromSearch() {
 
 function noTimerText(m) {
   return m.spawn
-    ? `${m.name} n'apparaît pas sur un timer (${m.spawn}). Quelle durée veux-tu utiliser ?`
-    : 'Le fichier de données n\'indique pas encore de durée pour cet archimonstre. Laquelle utiliser ?';
+    ? tr('{nom} n\'apparaît pas sur un timer ({x}). Quelle durée veux-tu utiliser ?', { nom: m.name, x: m.spawn })
+    : tr('Le fichier de données n\'indique pas encore de durée pour cet archimonstre. Laquelle utiliser ?');
 }
 
 function setDuration(m, d) {
@@ -636,10 +639,9 @@ function readDurations(minEl, maxEl, errEl, required = true) {
   const maxTxt = maxEl.value.trim();
   const max = maxTxt ? parseDuration(maxTxt) : null;
   let err = '';
-  if (required && !min) err = `« ${minEl.value || ''} » n'est pas une durée reconnue.`;
-  else if (!required && minEl.value.trim() && !min) err = `« ${minEl.value} » n'est pas une durée reconnue.`;
-  else if (maxTxt && !max) err = `Durée max « ${maxTxt} » non reconnue.`;
-  else if (max && min && max <= min) err = 'La durée max doit être plus longue que la durée.';
+  if ((required && !min) || (!required && minEl.value.trim() && !min)) err = tr('« {x} » n\'est pas une durée reconnue.', { x: minEl.value || '' });
+  else if (maxTxt && !max) err = tr('Durée max « {x} » non reconnue.', { x: maxTxt });
+  else if (max && min && max <= min) err = tr('La durée max doit être plus longue que la durée.');
   errEl.hidden = !err;
   errEl.textContent = err;
   return err ? null : { min, max };
@@ -672,7 +674,7 @@ async function editMonster(id) {
   };
   const err = $('#monsterError');
   const isData = m?.source === 'data';
-  $('#monsterTitle').textContent = m ? m.name : 'Ajouter un archimonstre';
+  $('#monsterTitle').textContent = m ? m.name : tr('Ajouter un archimonstre');
   f.name.value = m?.name || '';
   f.min.value = m?.min ? fmtShort(m.min) : '';
   f.max.value = m?.max ? fmtShort(m.max) : '';
@@ -681,20 +683,21 @@ async function editMonster(id) {
   f.level.value = m?.level || '';
   for (const k of ['name', 'family', 'zone', 'level']) f[k].disabled = isData;
   $('#monsterHint').textContent = isData
-    ? `Archimonstre du fichier de données${m.fileMin ? ` (durée du fichier : ${fmtShort(m.fileMin)}${m.fileMax ? '–' + fmtShort(m.fileMax) : ''})` : ' (pas de durée dans le fichier)'}. Ta durée perso est prioritaire.`
-    : 'Archimonstre perso : il n\'existe que dans ta liste.';
+    ? (m.fileMin ? tr('Archimonstre du fichier de données (durée du fichier : {d}). Ta durée perso est prioritaire.', { d: fmtShort(m.fileMin) + (m.fileMax ? '–' + fmtShort(m.fileMax) : '') })
+      : tr('Archimonstre du fichier de données (pas de durée dans le fichier). Ta durée perso est prioritaire.'))
+    : tr('Archimonstre perso : il n\'existe que dans ta liste.');
   $('#monsterReset').hidden = !(isData && m.overridden);
-  $('#monsterReset').textContent = 'Rétablir la durée du fichier';
+  $('#monsterReset').textContent = tr('Rétablir la durée du fichier');
   err.hidden = true;
 
   let res = null;
   const form = dlg.querySelector('form');
   const onSubmit = e => {
     const name = cleanName(f.name.value);
-    if (!isData && !name) { err.hidden = false; err.textContent = 'Indique un nom.'; e.preventDefault(); return; }
+    if (!isData && !name) { err.hidden = false; err.textContent = tr('Indique un nom.'); e.preventDefault(); return; }
     const newId = isData ? m.id : slug(name);
     if (!isData && newId !== m?.id && CATALOG.some(x => x.id === newId)) {
-      err.hidden = false; err.textContent = 'Un archimonstre porte déjà ce nom.'; e.preventDefault(); return;
+      err.hidden = false; err.textContent = tr('Un archimonstre porte déjà ce nom.'); e.preventDefault(); return;
     }
     const d = readDurations(f.min, f.max, err, !isData);
     if (!d) { e.preventDefault(); return; }
@@ -711,7 +714,7 @@ async function editMonster(id) {
   form.removeEventListener('submit', onSubmit);
   $('#monsterReset').removeEventListener('click', onReset);
 
-  if (rv === 'reset') { refreshCatalog(); persist(); renderBestiary(); toast('Durée du fichier rétablie.'); return; }
+  if (rv === 'reset') { refreshCatalog(); persist(); renderBestiary(); toast(tr('Durée du fichier rétablie.')); return; }
   if (rv !== 'ok' || !res) return;
   if (isData) {
     if (res.d.min) state.overrides[m.id] = { min: res.d.min, max: res.d.max };
@@ -733,7 +736,7 @@ async function editMonster(id) {
   persist();
   renderBestiary();
   renderTimers(true);
-  toast('Enregistré.', 'ok');
+  toast(tr('Enregistré.'), 'ok');
 }
 
 function deleteCustom(id) {
@@ -746,7 +749,7 @@ function deleteCustom(id) {
   persist();
   renderBestiary();
   renderTimers(true);
-  toastUndo(`${escapeHtml(c.name)} supprimé de ta liste.`, () => {
+  toastUndo(tr('{nom} supprimé de ta liste.', { nom: escapeHtml(c.name) }), () => {
     state.custom[id] = c;
     if (t) state.timers[id] = t;
     refreshCatalog(); persist(); renderBestiary(); renderTimers(true);
@@ -763,40 +766,41 @@ function renderBestiary() {
   $('#bestiaryWrap').hidden = rows.length === 0;
   $('#bestiaryBody').innerHTML = rows.map(m => {
     const dur = m.min ? escapeHtml(fmtShort(m.min) + (m.max ? ' – ' + fmtShort(m.max) : ''))
-      : m.spawn ? `<span class="chip spawn">${escapeHtml(m.spawn)}</span>` : '<span class="chip unknown">à définir</span>';
-    const tags = (m.source === 'custom' ? '<span class="tag custom">perso</span>' : '')
-      + (m.overridden ? '<span class="tag perso">durée perso</span>' : '');
+      : m.spawn ? `<span class="chip spawn">${escapeHtml(m.spawn)}</span>` : `<span class="chip unknown">${tr('à définir')}</span>`;
+    const tags = (m.source === 'custom' ? `<span class="tag custom">${tr('perso')}</span>` : '')
+      + (m.overridden ? `<span class="tag perso">${tr('durée perso')}</span>` : '');
     return `<tr data-id="${escapeHtml(m.id)}">
       <td class="name"><div class="archi-name">${archiPortrait(m, 64, 'row-pic')}<div>${escapeHtml(m.name)}${tags}${m.family ? `<div class="sub">${escapeHtml(m.family)}</div>` : ''}</div></div></td>
       <td class="dim">${escapeHtml(m.zone || '—')}</td>
       <td class="num dim">${m.level ?? '—'}</td>
       <td>${dur}</td>
       <td class="row-actions">
-        <button class="icon-btn" data-act="launch" title="Lancer le timer" aria-label="Lancer ${escapeHtml(m.name)}">${ICON.play}</button>
-        <button class="icon-btn" data-act="edit" title="Modifier" aria-label="Modifier ${escapeHtml(m.name)}">${ICON.edit}</button>
-        ${m.source === 'custom' ? `<button class="icon-btn del" data-act="delete" title="Supprimer" aria-label="Supprimer ${escapeHtml(m.name)}">${ICON.remove}</button>` : ''}
+        <button class="icon-btn" data-act="launch" title="${tr('Lancer le timer')}" aria-label="${tr('Lancer')} ${escapeHtml(m.name)}">${ICON.play}</button>
+        <button class="icon-btn" data-act="edit" title="${tr('Modifier')}" aria-label="${tr('Modifier')} ${escapeHtml(m.name)}">${ICON.edit}</button>
+        ${m.source === 'custom' ? `<button class="icon-btn del" data-act="delete" title="${tr('Supprimer')}" aria-label="${tr('Supprimer')} ${escapeHtml(m.name)}">${ICON.remove}</button>` : ''}
       </td></tr>`;
   }).join('');
   const total = dataMonsters.length, withTimer = dataMonsters.filter(d => d.min).length;
-  $('#dataInfo').textContent = `${total} archimonstre${total > 1 ? 's' : ''} dans le fichier de données`
-    + (total ? ` (${withTimer} avec durée)` : '')
-    + `, ${Object.keys(state.custom).length} ajouté(s) par toi`
-    + (dataFile.maj ? ` · données mises à jour le ${dataFile.maj}` : '') + '.';
-  $('#dataNote').textContent = dataFile.remarque || '';
-  $('#dataNote').hidden = !dataFile.remarque;
+  $('#dataInfo').textContent = tn(total, '{n} archimonstre dans le fichier de données', '{n} archimonstres dans le fichier de données')
+    + (total ? ` ${tr('({n} avec durée)', { n: withTimer })}` : '')
+    + tr(', {n} ajouté(s) par toi', { n: Object.keys(state.custom).length })
+    + (dataFile.maj ? ` · ${tr('données mises à jour le {d}', { d: dataFile.maj })}` : '') + '.';
+  const note = isEn ? dataFile.remarque_en || dataFile.remarque : dataFile.remarque;
+  $('#dataNote').textContent = note || '';
+  $('#dataNote').hidden = !note;
   const src = String(dataFile.source || '');
   const url = src.match(/https?:\/\/\S+/)?.[0];
   $('#dataSource').innerHTML = src
-    ? 'Source : ' + (url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(src.replace(url, '').replace(/[\s:]+$/, ''))}</a>` : escapeHtml(src))
+    ? tr('Source :') + ' ' + (url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(src.replace(url, '').replace(/[\s:]+$/, ''))}</a>` : escapeHtml(src))
     : '';
 }
 
 $('#addMonsterBtn').addEventListener('click', () => editMonster(null));
 $('#bestiaryBody').addEventListener('click', async e => {
   const btn = e.target.closest('[data-act]');
-  const tr = e.target.closest('tr');
-  if (!btn || !tr) return;
-  const m = byId(tr.dataset.id);
+  const row = e.target.closest('tr');
+  if (!btn || !row) return;
+  const m = byId(row.dataset.id);
   if (!m) return;
   if (btn.dataset.act === 'edit') editMonster(m.id);
   if (btn.dataset.act === 'delete') deleteCustom(m.id);
@@ -859,18 +863,18 @@ async function refreshScanStatus() {
   if (!el || $('#view-settings').hidden || !native.on) { clearInterval(scanStatusTimer); scanStatusTimer = null; return; }
   const st = await native.scanStatus();
   if (!st) { el.textContent = ''; return; }
-  if (!st.enabled) { el.textContent = 'Scan désactivé.'; el.className = 'scan-status'; return; }
+  if (!st.enabled) { el.textContent = tr('Scan désactivé.'); el.className = 'scan-status'; return; }
   if (!st.exe && !st.title) {
-    el.textContent = 'Passe sur la fenêtre de WAKFU puis reviens ici : l\'appli indiquera si elle reconnaît le jeu.';
+    el.textContent = tr('Passe sur la fenêtre de WAKFU puis reviens ici : l\'appli indiquera si elle reconnaît le jeu.');
     el.className = 'scan-status';
     return;
   }
-  const what = `${st.exe || 'programme inconnu'}${st.title ? ` « ${st.title} »` : ''}`;
+  const what = `${st.exe || tr('programme inconnu')}${st.title ? ` « ${st.title} »` : ''}`;
   el.textContent = st.game && st.regFailed
-    ? `Dernière fenêtre active : ${what}, reconnue comme le jeu, mais Windows refuse Ctrl+D ou Ctrl+F : un autre programme utilise déjà ce raccourci.`
+    ? tr('Dernière fenêtre active : {w}, reconnue comme le jeu, mais Windows refuse Ctrl+D ou Ctrl+F : un autre programme utilise déjà ce raccourci.', { w: what })
     : st.game
-    ? `✓ Dernière fenêtre active : ${what}, reconnue comme le jeu. Ctrl+D et Ctrl+F y sont actifs.`
-    : `Dernière fenêtre active : ${what}, ce n'est pas le jeu. Passe sur WAKFU puis reviens vérifier.`;
+    ? tr('✓ Dernière fenêtre active : {w}, reconnue comme le jeu. Ctrl+D et Ctrl+F y sont actifs.', { w: what })
+    : tr('Dernière fenêtre active : {w}, ce n\'est pas le jeu. Passe sur WAKFU puis reviens vérifier.', { w: what });
   el.className = `scan-status ${st.game && !st.regFailed ? 'ok' : ''}`;
 }
 
@@ -888,23 +892,24 @@ function renderSettings() {
   $$('.web-only').forEach(el => { el.hidden = native.on; });
   const permBtn = $('#notifPermBtn');
   if (native.on) {
-    $('#notifText').textContent = 'Notification Windows quand un timer se termine (gérée par l\'appli PC).';
+    $('#notifText').textContent = tr('Notification Windows quand un timer se termine (gérée par l\'appli PC).');
     permBtn.hidden = true;
   } else if (!('Notification' in window)) {
-    $('#notifText').textContent = 'Ce navigateur ne gère pas les notifications.';
+    $('#notifText').textContent = tr('Ce navigateur ne gère pas les notifications.');
     permBtn.hidden = true;
   } else {
     const p = Notification.permission;
     permBtn.hidden = p === 'granted' || !s.notify;
-    permBtn.textContent = p === 'denied' ? 'Bloquées par le navigateur' : 'Autoriser';
+    permBtn.textContent = p === 'denied' ? tr('Bloquées par le navigateur') : tr('Autoriser');
     permBtn.disabled = p === 'denied';
     $('#notifText').textContent = p === 'granted'
-      ? 'Une notification système quand un timer se termine.'
-      : 'Une notification système quand un timer se termine (autorisation du navigateur requise).';
+      ? tr('Une notification système quand un timer se termine.')
+      : tr('Une notification système quand un timer se termine (autorisation du navigateur requise).');
   }
   renderJobSettings();
-  $('#aboutText').innerHTML = `Version ${APP_VERSION}${native.on ? ' · appli PC' : ''} · `
-    + 'Projet de fan communautaire, non affilié à Ankama · <a href="mentions-legales.html">Mentions légales</a>';
+  $('#setLang').value = lang;
+  $('#aboutText').innerHTML = `Version ${APP_VERSION}${native.on ? ` · ${tr('appli PC')}` : ''} · `
+    + `${tr('Projet de fan communautaire, non affilié à Ankama')} · <a href="mentions-legales.html">${tr('Mentions légales')}</a>`;
 }
 
 // niveaux de métier du joueur (Réglages) : la liste de craft s'en sert pour signaler ce qui est hors de portée
@@ -912,7 +917,7 @@ function renderJobSettings() {
   const grid = $('#jobsGrid');
   if (!grid) return;
   const focused = document.activeElement?.dataset?.job;
-  grid.innerHTML = JOBS.map(m => `<label class="job-input"><span>${escapeHtml(m)}</span>`
+  grid.innerHTML = JOBS.map(m => `<label class="job-input"><span>${escapeHtml(jobName(m))}</span>`
     + `<input type="number" class="num-input" min="0" max="300" placeholder="—" data-job="${escapeHtml(m)}" value="${state.metiers[m] || ''}"></label>`).join('');
   if (focused) grid.querySelector(`[data-job="${CSS.escape(focused)}"]`)?.focus();
 }
@@ -926,11 +931,13 @@ $('#jobsGrid').addEventListener('change', e => {
   renderCraft();
 });
 
+$('#setLang').addEventListener('change', e => setLang(e.target.value));
+
 const setSetting = (k, v) => { state.settings[k] = v; persist(); renderSettings(); };
 $('#setSound').addEventListener('change', e => setSetting('sound', e.target.checked));
 $('#setVolume').addEventListener('change', e => setSetting('volume', +e.target.value));
 $('#setVolume').addEventListener('input', e => { state.settings.volume = +e.target.value; });
-$('#testSound').addEventListener('click', () => { playChime(); if (native.on) native.notify("Wak'Forge", 'Test de notification'); });
+$('#testSound').addEventListener('click', () => { playChime(); if (native.on) native.notify("Wak'Forge", tr('Test de notification')); });
 $('#setSoon').addEventListener('change', e => {
   setSetting('soonMin', Math.min(120, Math.max(0, Math.round(+e.target.value || 0))));
   renderTimers(true);
@@ -970,9 +977,9 @@ $('#importFile').addEventListener('change', async e => {
     mergeInto(incoming);
     refreshCatalog(); markPastAsNotified(); persist();
     renderTimers(true); renderBestiary();
-    toast('Import terminé.', 'ok');
+    toast(tr('Import terminé.'), 'ok');
   } catch (err) {
-    toast(`Import impossible : ${escapeHtml(err.message)}`, 'error');
+    toast(tr('Import impossible : {err}', { err: escapeHtml(err.message) }), 'error');
   }
 });
 
@@ -986,7 +993,7 @@ function fromLegacyTxt(text) {
     if (k === 'M' && +a > 0) s.custom[id] = { name: cleanName(name), min: +a, max: null, family: '', zone: '', level: null };
     if (k === 'T' && +a > 0 && +b > 0) s.timers[id] = { name: cleanName(name), start: (+a - +b) * 1000, min: +b, max: null };
   }
-  if (!Object.keys(s.custom).length && !Object.keys(s.timers).length) throw new Error('fichier non reconnu');
+  if (!Object.keys(s.custom).length && !Object.keys(s.timers).length) throw new Error(tr('fichier non reconnu'));
   return s;
 }
 
@@ -1027,7 +1034,7 @@ const craftLists = {
   },
   create(nom, craft = defaultCraft()) {
     if (state.listes.length >= MAX_LISTES) return false;
-    const l = { id: newListId(), nom: cleanName(nom).slice(0, 40) || 'Nouvelle liste', craft };
+    const l = { id: newListId(), nom: cleanName(nom).slice(0, 40) || tr('Nouvelle liste'), craft };
     state.listes.push(l);
     state.listeActive = l.id; state.craft = l.craft;
     persist();
@@ -1066,14 +1073,14 @@ function addMissingLists(other) {
 }
 
 $('#resetBtn').addEventListener('click', () => {
-  if (!confirm('Effacer tous tes timers, durées perso et archimonstres ajoutés ?' + (sync.user ? '\nCela s\'applique aussi à ton compte.' : ''))) return;
+  if (!confirm(tr('Effacer tous tes timers, durées perso et archimonstres ajoutés ?') + (sync.user ? `\n${tr('Cela s\'applique aussi à ton compte.')}` : ''))) return;
   const settings = state.settings;
   const { craft, listes, listeActive, prix, metiers } = state;
   state = defaultState();
   Object.assign(state, { settings, craft, listes, listeActive, prix, metiers });
   refreshCatalog(); persist(); persistDevice();
   renderTimers(true); renderBestiary();
-  toast('Tout a été effacé.');
+  toast(tr('Tout a été effacé.'));
 });
 
 /* =================================================================== compte */
@@ -1083,68 +1090,66 @@ let syncState = 'local', syncDetail = '';
 function renderAccountButton() {
   const dot = $('#syncDot');
   dot.dataset.state = sync.user ? syncState : (sync.enabled ? 'local' : (syncState === 'error' ? 'error' : 'local'));
-  $('#accountLabel').textContent = sync.user ? sync.user.email : (sync.enabled ? 'Se connecter' : 'Mode local');
-  $('#accountBtn').title = $('#accountLabel').textContent;
-  $('#accountBtn').title = syncDetail || (sync.user ? 'Synchronisé' : 'Données enregistrées sur cet appareil');
+  $('#accountLabel').textContent = sync.user ? sync.user.email : (sync.enabled ? tr('Se connecter') : tr('Mode local'));
+  $('#accountBtn').title = syncDetail || (sync.user ? tr('Synchronisé') : tr('Données enregistrées sur cet appareil'));
 }
 
 function accountView(mode = 'login', msg = null) {
   const body = $('#accountBody');
   if (!sync.enabled) {
-    body.innerHTML = `<h2>Mode local</h2>
-      <p>${syncDetail ? escapeHtml(syncDetail) : 'Les comptes ne sont pas activés sur cette version.'}</p>
-      <p>Tes timers et ta liste sont enregistrés sur cet appareil. Pour les retrouver ailleurs, utilise
-      <b>Réglages → Exporter / Importer</b>, ou active les comptes (voir le README du projet, section « Connexion »).</p>
+    body.innerHTML = `<h2>${tr('Mode local')}</h2>
+      <p>${syncDetail ? escapeHtml(syncDetail) : tr('Les comptes ne sont pas activés sur cette version.')}</p>
+      <p>${tr('Tes timers et ta liste sont enregistrés sur cet appareil. Pour les retrouver ailleurs, utilise <b>Réglages → Exporter / Importer</b>, ou active les comptes (voir le README du projet, section « Connexion »).')}</p>
       <div class="dlg-actions"><button class="btn primary" data-close>OK</button></div>`;
     return;
   }
   if (sync.user) {
-    const st = { ok: 'Synchronisé ✓', sync: 'Synchronisation…', error: `Erreur : ${syncDetail}`, local: 'En attente' }[syncState] || '';
-    body.innerHTML = `<h2>Mon compte</h2>
+    const st = { ok: tr('Synchronisé ✓'), sync: tr('Synchronisation…'), error: tr('Erreur : {err}', { err: syncDetail }), local: tr('En attente') }[syncState] || '';
+    body.innerHTML = `<h2>${tr('Mon compte')}</h2>
       <div class="account-card"><div class="avatar">${escapeHtml((sync.user.email || '?')[0].toUpperCase())}</div>
         <div><b>${escapeHtml(sync.user.email)}</b><div class="muted small">${escapeHtml(st)}</div></div></div>
-      <p class="small">Tes timers, durées perso et ajouts sont synchronisés en direct entre tous tes appareils (site et appli PC).</p>
+      <p class="small">${tr('Tes timers, durées perso et ajouts sont synchronisés en direct entre tous tes appareils (site et appli PC).')}</p>
       <div class="dlg-actions">
-        <button class="btn" id="accSyncNow" type="button">Synchroniser</button>
+        <button class="btn" id="accSyncNow" type="button">${tr('Synchroniser')}</button>
         <span class="spacer"></span>
-        <button class="btn danger" id="accLogout" type="button">Se déconnecter</button>
-        <button class="btn primary" data-close>Fermer</button>
+        <button class="btn danger" id="accLogout" type="button">${tr('Se déconnecter')}</button>
+        <button class="btn primary" data-close>${tr('Fermer')}</button>
       </div>`;
     $('#accSyncNow').onclick = () => sync.pushNow();
     $('#accLogout').onclick = async () => {
-      try { await sync.signOut(); $('#accountDlg').close(); toast('Déconnecté. Tes données restent sur cet appareil.'); }
+      try { await sync.signOut(); $('#accountDlg').close(); toast(tr('Déconnecté. Tes données restent sur cet appareil.')); }
       catch (e) { toast(escapeHtml(e.message), 'error'); }
     };
     return;
   }
   if (mode === 'recovery') {
-    body.innerHTML = `<form id="accForm"><h2>Nouveau mot de passe</h2>
-      <label class="field"><span>Nouveau mot de passe</span><input id="accPass" type="password" autocomplete="new-password" minlength="6" required></label>
+    body.innerHTML = `<form id="accForm"><h2>${tr('Nouveau mot de passe')}</h2>
+      <label class="field"><span>${tr('Nouveau mot de passe')}</span><input id="accPass" type="password" autocomplete="new-password" minlength="6" required></label>
       <p class="error" id="accErr" hidden></p>
-      <div class="dlg-actions"><button class="btn" type="button" data-close>Annuler</button><button class="btn primary">Enregistrer</button></div></form>`;
+      <div class="dlg-actions"><button class="btn" type="button" data-close>${tr('Annuler')}</button><button class="btn primary">${tr('Enregistrer')}</button></div></form>`;
     $('#accForm').onsubmit = async e => {
       e.preventDefault();
-      try { await sync.updatePassword($('#accPass').value); $('#accountDlg').close(); toast('Mot de passe modifié.', 'ok'); }
+      try { await sync.updatePassword($('#accPass').value); $('#accountDlg').close(); toast(tr('Mot de passe modifié.'), 'ok'); }
       catch (err) { $('#accErr').hidden = false; $('#accErr').textContent = err.message; }
     };
     return;
   }
   const isLogin = mode === 'login', isForgot = mode === 'forgot';
   body.innerHTML = `<form id="accForm">
-    <h2>${isForgot ? 'Mot de passe oublié' : 'Garde tes timers partout'}</h2>
-    ${isForgot ? '<p>On t\'envoie un lien pour choisir un nouveau mot de passe.</p>'
-      : `<p>Connecte-toi pour retrouver tes timers et ta liste sur le site et l'appli PC.</p>
-      <div class="seg" role="group"><button type="button" data-mode="login" aria-pressed="${isLogin}">Connexion</button>
-      <button type="button" data-mode="signup" aria-pressed="${!isLogin}">Créer un compte</button></div>`}
-    <label class="field"><span>E-mail</span><input id="accEmail" type="email" autocomplete="email" required></label>
-    ${isForgot ? '' : `<label class="field"><span>Mot de passe</span><input id="accPass" type="password" ${isLogin ? '' : 'minlength="6"'}
+    <h2>${isForgot ? tr('Mot de passe oublié') : tr('Garde tes timers partout')}</h2>
+    ${isForgot ? `<p>${tr('On t\'envoie un lien pour choisir un nouveau mot de passe.')}</p>`
+      : `<p>${tr('Connecte-toi pour retrouver tes timers et ta liste sur le site et l\'appli PC.')}</p>
+      <div class="seg" role="group"><button type="button" data-mode="login" aria-pressed="${isLogin}">${tr('Connexion')}</button>
+      <button type="button" data-mode="signup" aria-pressed="${!isLogin}">${tr('Créer un compte')}</button></div>`}
+    <label class="field"><span>${tr('E-mail')}</span><input id="accEmail" type="email" autocomplete="email" required></label>
+    ${isForgot ? '' : `<label class="field"><span>${tr('Mot de passe')}</span><input id="accPass" type="password" ${isLogin ? '' : 'minlength="6"'}
       autocomplete="${isLogin ? 'current-password' : 'new-password'}" required></label>`}
-    ${isLogin ? '<button class="link" type="button" data-mode="forgot">Mot de passe oublié ?</button>' : ''}
+    ${isLogin ? `<button class="link" type="button" data-mode="forgot">${tr('Mot de passe oublié ?')}</button>` : ''}
     <p class="${msg?.ok ? 'success' : 'error'}" id="accErr" ${msg ? '' : 'hidden'}>${msg ? escapeHtml(msg.text) : ''}</p>
     <div class="dlg-actions">
-      ${isForgot ? '<button class="btn ghost" type="button" data-mode="login">Retour</button><span class="spacer"></span>' : ''}
-      <button class="btn" type="button" data-close>Annuler</button>
-      <button class="btn primary" id="accSubmit">${isForgot ? 'Envoyer le lien' : isLogin ? 'Se connecter' : 'Créer mon compte'}</button>
+      ${isForgot ? `<button class="btn ghost" type="button" data-mode="login">${tr('Retour')}</button><span class="spacer"></span>` : ''}
+      <button class="btn" type="button" data-close>${tr('Annuler')}</button>
+      <button class="btn primary" id="accSubmit">${isForgot ? tr('Envoyer le lien') : isLogin ? tr('Se connecter') : tr('Créer mon compte')}</button>
     </div></form>`;
   body.querySelectorAll('[data-mode]').forEach(b => { b.onclick = () => accountView(b.dataset.mode); });
   const form = $('#accForm');
@@ -1157,11 +1162,11 @@ function accountView(mode = 'login', msg = null) {
     btn.disabled = true;
     err.hidden = true;
     try {
-      if (isForgot) { await sync.resetPassword(email); accountView('login', { ok: true, text: 'Lien envoyé, regarde tes mails.' }); return; }
-      if (isLogin) { await sync.signIn(email, pass); $('#accountDlg').close(); toast('Connecté ✓', 'ok'); return; }
+      if (isForgot) { await sync.resetPassword(email); accountView('login', { ok: true, text: tr('Lien envoyé, regarde tes mails.') }); return; }
+      if (isLogin) { await sync.signIn(email, pass); $('#accountDlg').close(); toast(tr('Connecté ✓'), 'ok'); return; }
       const data = await sync.signUp(email, pass);
-      if (data?.session) { $('#accountDlg').close(); toast('Compte créé ✓', 'ok'); }
-      else accountView('login', { ok: true, text: 'Compte créé ! Clique sur le lien reçu par e-mail, puis connecte-toi.' });
+      if (data?.session) { $('#accountDlg').close(); toast(tr('Compte créé ✓'), 'ok'); }
+      else accountView('login', { ok: true, text: tr('Compte créé ! Clique sur le lien reçu par e-mail, puis connecte-toi.') });
     } catch (ex) {
       err.hidden = false;
       err.className = 'error';
@@ -1217,7 +1222,7 @@ function toast(html, kind = '', ms = 3500) {
   return el;
 }
 function toastUndo(html, undo) {
-  const el = toast(`${html} <button class="link" type="button">Annuler</button>`, '', 6000);
+  const el = toast(`${html} <button class="link" type="button">${tr('Annuler')}</button>`, '', 6000);
   el.querySelector('button').addEventListener('click', () => { undo(); el.remove(); });
 }
 
@@ -1251,8 +1256,8 @@ async function checkUpdate() {
   if (!tag || rel.draft || rel.prerelease || !isNewer(tag, current)) return;
   const asset = (rel.assets || []).find(x => /\.exe$/i.test(x.name || ''));
   update = { tag, url: asset?.browser_download_url || '', page: rel.html_url || RELEASES_PAGE };
-  $('#updateText').innerHTML = `<b>Wak'Forge ${escapeHtml(tag)}</b> est disponible (tu as la ${escapeHtml(current.replace(/^v?/, 'v'))}).`;
-  $('#updateGo').textContent = update.url ? 'Mettre à jour' : 'Voir la nouvelle version';
+  $('#updateText').innerHTML = tr('<b>Wak\'Forge {v}</b> est disponible (tu as la {cur}).', { v: escapeHtml(tag), cur: escapeHtml(current.replace(/^v?/, 'v')) });
+  $('#updateGo').textContent = update.url ? tr('Mettre à jour') : tr('Voir la nouvelle version');
   $('#updateGo').disabled = false;
   $('#updateLater').hidden = false;
   $('#updateBar').hidden = false;
@@ -1263,9 +1268,9 @@ $('#updateGo').addEventListener('click', () => {
   if (!update.url || update.failed || !window.nativeUpdate) { native.openURL(update.page); return; }
   update.busy = true;
   $('#updateGo').disabled = true;
-  $('#updateGo').textContent = 'Téléchargement…';
+  $('#updateGo').textContent = tr('Téléchargement…');
   $('#updateLater').hidden = true;
-  $('#updateText').innerHTML = `Téléchargement de <b>Wak'Forge ${escapeHtml(update.tag)}</b>… L'appli va redémarrer toute seule.`;
+  $('#updateText').innerHTML = tr('Téléchargement de <b>Wak\'Forge {v}</b>… L\'appli va redémarrer toute seule.', { v: escapeHtml(update.tag) });
   window.nativeUpdate(update.url).catch(e => window.wfUpdateFailed(String(e?.message || e)));
 });
 $('#updateLater').addEventListener('click', () => { updateHidden = true; $('#updateBar').hidden = true; });
@@ -1274,8 +1279,8 @@ window.wfUpdateFailed = msg => {
   if (!update) return;
   update.busy = false;
   update.failed = true;
-  $('#updateText').innerHTML = `Mise à jour impossible : ${escapeHtml(msg)}. Tu peux télécharger <b>WakForge.exe</b> à la main.`;
-  $('#updateGo').textContent = 'Ouvrir la page de téléchargement';
+  $('#updateText').innerHTML = tr('Mise à jour impossible : {err}. Tu peux télécharger <b>WakForge.exe</b> à la main.', { err: escapeHtml(msg) });
+  $('#updateGo').textContent = tr('Ouvrir la page de téléchargement');
   $('#updateGo').disabled = false;
   $('#updateLater').hidden = false;
 };
@@ -1285,24 +1290,25 @@ window.wfUpdateFailed = msg => {
 function renderGameSource() {
   const g = gamedataInfo();
   $('#craftSource').innerHTML = g
-    ? `Données du jeu : version ${escapeHtml(g.version)} (CDN Ankama et textes du jeu), drops et monstres : <a href="https://wakfu.wiki.gg" target="_blank" rel="noopener">wakfu.wiki.gg</a> (CC BY-SA). Mise à jour : ${escapeHtml(g.maj)}.`
+    ? tr('Données du jeu : version {v} (CDN Ankama et textes du jeu), drops et monstres : {wiki} (CC BY-SA). Mise à jour : {d}.', { v: escapeHtml(g.version), d: escapeHtml(g.maj), wiki: '<a href="https://wakfu.wiki.gg" target="_blank" rel="noopener">wakfu.wiki.gg</a>' })
     : '';
 }
 
 /** Importe une liste reçue par lien (#liste=…) comme nouvelle liste, après confirmation. */
 function importShared(text) {
   const d = decodeShare(text);
-  if (!d) { toast('Ce lien de liste est invalide ou incomplet.', 'error'); return false; }
-  const nom = cleanName(d.nom || '').slice(0, 40) || 'Liste partagée';
+  if (!d) { toast(tr('Ce lien de liste est invalide ou incomplet.'), 'error'); return false; }
+  const nom = cleanName(d.nom || '').slice(0, 40) || tr('Liste partagée');
   const n = d.cibles.length;
-  if (!confirm(`Importer la liste partagée « ${nom} » (${n} objet${n > 1 ? 's' : ''}) ?\nElle s'ajoute à tes listes, sans toucher aux autres.`)) return true;
+  if (!confirm(tn(n, 'Importer la liste partagée « {nom} » ({n} objet) ?', 'Importer la liste partagée « {nom} » ({n} objets) ?', { nom })
+    + `\n${tr('Elle s\'ajoute à tes listes, sans toucher aux autres.')}`)) return true;
   if (!craftLists.create(nom, sanitizeCraft({ cibles: d.cibles }))) {
-    toast(`Tu as déjà ${MAX_LISTES} listes : supprimes-en une pour importer celle-ci.`, 'warn');
+    toast(tr('Tu as déjà {n} listes : supprimes-en une pour importer celle-ci.', { n: MAX_LISTES }), 'warn');
     return true;
   }
   showView('craft');
   renderCraft();
-  toast(`Liste <b>${escapeHtml(nom)}</b> importée.`, 'ok');
+  toast(tr('Liste <b>{nom}</b> importée.', { nom: escapeHtml(nom) }), 'ok');
   return true;
 }
 function checkSharedHash() {
@@ -1313,6 +1319,7 @@ function checkSharedHash() {
 }
 
 async function main() {
+  translateDom();
   initCraft({
     getCraft: () => state.craft,
     lists: craftLists,

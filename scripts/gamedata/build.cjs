@@ -106,17 +106,17 @@
     return s;
   }
 
-  function effectText(def, level, actions, states) {
+  function effectText(def, level, actions, states, lang = 'fr') {
     const a = actions.get(def.actionId);
     if (!a) return null;
     const p = def.params || [];
     const val = k => effValue(p, k, level);
     if (def.actionId === 304) { // applique un état
       const st = states.get(p[0]);
-      return st ? `${st}${val(2) ? ` (niv. ${val(2)})` : ''}` : null;
+      return st ? `${st}${val(2) ? ` (${lang === 'en' ? 'lvl.' : 'niv.'} ${val(2)})` : ''}` : null;
     }
     if (def.actionId === 400 || def.actionId === 39 || def.actionId === 40 || def.actionId >= 999 && def.actionId <= 1020) return null;
-    const txt = renderTemplate(a.description?.fr || a.definition.effect, val);
+    const txt = renderTemplate(a.description?.[lang] || a.description?.fr || a.definition.effect, val);
     return txt || null;
   }
 
@@ -132,8 +132,11 @@
       return t || null;
     };
     const monstre = s => look(noms.monstres, s);
-    const famille = s => look(noms.familles, s) || look(noms.familles, `${s}s`) || look(noms.familles, `${s}es`);
-    const zone = s => look(noms.zones, s);
+    // français -> anglais d'origine, pour la version anglaise du site (data_en.json)
+    const back = res.data_en ? { familles: res.data_en.familles, zones: res.data_en.zones } : { familles: {}, zones: {} };
+    const keep = (table, en, fr) => { if (fr && fr !== en) table[fr] = en; return fr; };
+    const famille = s => keep(back.familles, s, look(noms.familles, s) || look(noms.familles, `${s}s`) || look(noms.familles, `${s}es`));
+    const zone = s => keep(back.zones, s, look(noms.zones, s));
     const objet = s => look(noms.objets, String(s).replace(/\/(Common|Unusual|Rare|Mythical|Legendary|Relic|Souvenir|Epic|Old Item)$/, ''));
     let ok = 0;
     const SUFFIXES = { 'environmental quest': 'quête environnementale' };
@@ -184,6 +187,14 @@
     const types = new Map(g.itemTypes.map(t => [t.definition.id, plain(t.title?.fr)]));
     const jobs = new Map(g.recipeCategories.map(c => [c.definition.id, plain(c.title?.fr)]));
     const nodes = new Map(g.resources.map(r => [r.definition.id, plain(r.title?.fr)]));
+    // textes anglais (version anglaise du site) : table français -> anglais
+    const statesEn = new Map(g.states.map(s => [s.definition.id, plain(s.title?.en || s.title?.fr)]));
+    const frToEn = list => {
+      const t = {};
+      for (const x of list) { const fr = plain(x.title?.fr), en = plain(x.title?.en); if (fr && en && fr !== en && !t[fr]) t[fr] = en; }
+      return t;
+    };
+    const statsEn = {};
 
     // --- base des objets (jobsItems couvre toutes les ressources, items toutes les équipements)
     const all = new Map();
@@ -203,12 +214,15 @@
         gfx: d.graphicParameters?.gfxId || o.gfx,
       });
       if (d.baseParameters.itemSetId) o.panoplieId = d.baseParameters.itemSetId;
-      const stats = [];
+      const stats = [], statsE = [];
       for (const e of it.definition.equipEffects || []) {
         const t = effectText(e.effect.definition, d.level, actions, states);
         if (t) stats.push(t);
+        const te = effectText(e.effect.definition, d.level, actions, statesEn, 'en');
+        if (te) statsE.push(te);
       }
       if (stats.length) o.stats = stats;
+      if (statsE.length) statsEn[d.id] = statsE;
       all.set(d.id, o);
     }
 
@@ -401,6 +415,12 @@
     if (unmatched.size) log(`${unmatched.size} noms du wiki sans objet correspondant (gardés en anglais)`);
 
     const out = {
+      data_en: {
+        version_jeu: version, maj,
+        remarque: 'Textes anglais pour la version anglaise du site : tables français -> anglais et effets des équipements par id.',
+        types: frToEn(g.itemTypes), metiers: frToEn(g.recipeCategories), sources: frToEn(g.resources),
+        familles: {}, zones: {}, stats: statsEn,
+      },
       data_item: { ...meta, sources: [sourceCdn, sourceWiki], nb: items.length, items },
       data_ressource: { ...meta, sources: [sourceCdn, sourceWiki], nb: ressources.length, ressources },
       data_bestiaire: {

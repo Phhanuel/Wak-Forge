@@ -3,7 +3,7 @@
 // le cache ne sert que si le réseau est indisponible.
 const CACHE = 'wakforge-v4';
 const SHELL = [
-  './', 'index.html', 'mentions-legales.html', 'scan.html', 'js/scan.js', 'css/style.css', 'js/app.js', 'js/util.js', 'js/sync.js', 'js/craft.js', 'js/craftcore.js', 'js/config.js',
+  './', 'index.html', 'mentions-legales.html', 'scan.html', 'js/scan.js', 'css/style.css', 'js/app.js', 'js/util.js', 'js/sync.js', 'js/craft.js', 'js/craftcore.js', 'js/i18n.js', 'js/i18n-en.js', 'js/config.js',
   'data/data_archimonstre.json', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-32.png',
 ];
 

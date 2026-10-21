@@ -33,4 +33,11 @@ if (prev && result.data_item.nb < prev.nb * 0.8) {
 writeFileSync(out('data_item'), serialize(result.data_item, 'items'));
 writeFileSync(out('data_ressource'), serialize(result.data_ressource, 'ressources'));
 writeFileSync(out('data_bestiaire'), serialize(result.data_bestiaire, 'monstres'));
+// textes anglais : une entrée par ligne pour les effets
+{
+  const { stats, ...head } = result.data_en;
+  const lines = Object.entries(head).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)}`);
+  lines.push(`  "stats": {\n${Object.entries(stats).map(([id, v]) => `    ${JSON.stringify(id)}: ${JSON.stringify(v)}`).join(',\n')}\n  }`);
+  writeFileSync(out('data_en'), `{\n${lines.join(',\n')}\n}\n`);
+}
 console.log(`✓ Données ${result.data_item.version_jeu} écrites (${result.stats.nbUnmatched} noms du wiki non reliés).`);

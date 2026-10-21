@@ -1,6 +1,8 @@
 // Connexion et synchronisation via Supabase (optionnel).
 // Sans configuration (js/config.js vide), l'appli fonctionne en mode local.
 
+import { t } from './i18n.js';
+
 const SUPABASE_ESM = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/+esm';
 
 /**
@@ -20,7 +22,7 @@ export async function createSync({ config, getState, applyRemote, onStatus, onUs
   try {
     lib = await import(SUPABASE_ESM);
   } catch (e) {
-    onStatus('error', 'Service de connexion injoignable (hors ligne ?)');
+    onStatus('error', t('Service de connexion injoignable (hors ligne ?)'));
     return { ...off, error: true };
   }
 
@@ -77,7 +79,7 @@ export async function createSync({ config, getState, applyRemote, onStatus, onUs
     if (error) {
       lastError = error.message;
       onStatus('error', error.message.includes('user_state')
-        ? 'Table user_state introuvable : exécute supabase/schema.sql'
+        ? t('Table user_state introuvable : exécute supabase/schema.sql')
         : error.message);
       return;
     }
@@ -105,12 +107,12 @@ export async function createSync({ config, getState, applyRemote, onStatus, onUs
 
   const errText = e => {
     const m = e?.message || String(e);
-    if (/invalid login credentials/i.test(m)) return 'E-mail ou mot de passe incorrect.';
-    if (/email not confirmed/i.test(m)) return 'Confirme d\'abord ton e-mail (lien reçu par mail).';
-    if (/already registered/i.test(m)) return 'Un compte existe déjà avec cet e-mail.';
-    if (/password should be at least/i.test(m)) return 'Mot de passe trop court (6 caractères minimum).';
-    if (/rate limit/i.test(m)) return 'Trop de tentatives, réessaie dans quelques minutes.';
-    if (/fetch/i.test(m)) return 'Impossible de joindre le serveur (connexion internet ?).';
+    if (/invalid login credentials/i.test(m)) return t('E-mail ou mot de passe incorrect.');
+    if (/email not confirmed/i.test(m)) return t('Confirme d\'abord ton e-mail (lien reçu par mail).');
+    if (/already registered/i.test(m)) return t('Un compte existe déjà avec cet e-mail.');
+    if (/password should be at least/i.test(m)) return t('Mot de passe trop court (6 caractères minimum).');
+    if (/rate limit/i.test(m)) return t('Trop de tentatives, réessaie dans quelques minutes.');
+    if (/fetch/i.test(m)) return t('Impossible de joindre le serveur (connexion internet ?).');
     return m;
   };
   const wrap = p => p.then(({ data, error }) => { if (error) throw new Error(errText(error)); return data; },
