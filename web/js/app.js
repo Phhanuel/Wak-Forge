@@ -7,7 +7,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.15.0';
+const APP_VERSION = '2.15.1';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -877,6 +877,7 @@ function renderSettings() {
   $('#setTopmost').checked = device.topmost;
   $('#setScan').checked = device.scan;
   $$('.desktop-only').forEach(el => { el.hidden = !native.on; });
+  $$('.web-only').forEach(el => { el.hidden = native.on; });
   const permBtn = $('#notifPermBtn');
   if (native.on) {
     $('#notifText').textContent = 'Notification Windows quand un timer se termine (gérée par l\'appli PC).';

@@ -284,6 +284,8 @@ main { max-width: 1180px; margin: 0 auto; padding: 26px 16px 80px; }
 }
 .setting h3 { margin: 0 0 2px; font-size: 16px; }
 .setting p { margin: 0; color: var(--text-3); font-size: 14px; }
+.setting p.smartscreen { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--text-2); }
+.setting p.smartscreen b { color: var(--text); }
 .setting-ctl { display: flex; align-items: center; gap: 10px; flex: none; }
 .setting.danger h3 { color: var(--danger); }
 .setting.block { display: grid; gap: 12px; }
@@ -648,3 +650,4 @@ body.scan-win { margin: 0; overflow: hidden; background: var(--bg); }
 .legal-back { margin-left: auto; text-decoration: none; color: var(--text); }
 .scan-status { margin-top: 6px !important; font-size: 13px !important; color: var(--text-3); }
 .scan-status.ok { color: var(--ok) !important; }
+a.btn { text-decoration: none; }

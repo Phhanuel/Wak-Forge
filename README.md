@@ -8,6 +8,12 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 
 ![Capture de Wak'Forge](docs/capture.png)
 
+<details><summary>Bestiaire</summary>
+
+![Bestiaire de Wak'Forge](docs/bestiaire.png)
+
+</details>
+
 ## Fonctionnalités
 
 ### Craft et bestiaire
@@ -47,10 +53,11 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 | | |
 |---|---|
 | 🌐 **Site** | [wakforge.github.io](https://wakforge.github.io/) |
-| 💻 **Appli Windows** | Télécharge `WakForge.exe` dans [Releases](../../releases) et double-clique dessus. Aucune installation n'est nécessaire. |
+| 💻 **Appli Windows** | [Télécharge `WakForge.exe`](https://github.com/wakforge/wakforge.github.io/releases/latest/download/WakForge.exe) (ou dans [Releases](../../releases)) et double-clique dessus. Aucune installation n'est nécessaire. |
 
-> Au premier lancement, Windows SmartScreen peut afficher « Windows a protégé votre ordinateur » parce que l'exe n'est pas signé.
-> Clique sur **Informations complémentaires**, puis sur **Exécuter quand même**.
+> ⚠️ **Windows va afficher une alerte : c'est normal.** L'exe n'est pas signé (une signature de code est payante), donc Windows et le navigateur préviennent par précaution. Le code est public, ici même.
+> - **Au téléchargement**, si Edge ou Chrome bloque le fichier (« peu téléchargé ») : clique sur **⋯** puis **Conserver** (et **Conserver quand même**).
+> - **Au premier lancement**, Windows SmartScreen affiche « Windows a protégé votre ordinateur » : clique sur **Informations complémentaires**, puis **Exécuter quand même**. Ça ne se fait qu'une fois.
 
 **Mises à jour** : quand une nouvelle version est publiée, l'appli PC affiche un bandeau. Le bouton **Mettre à jour** télécharge le nouvel exe, le met à la place de l'ancien (dans le même dossier) et relance l'appli. Tes données ne bougent pas.
 
