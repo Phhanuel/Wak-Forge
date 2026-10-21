@@ -1,9 +1,10 @@
 // Onglets « Craft » (liste de courses) et « Bestiaire » + fiche objet.
 import { norm, escapeHtml } from './util.js';
-import { buildIndex, computeList, searchItems, sourcesOf, mainRecipe, monsterItemIds, RARITY_CLASS } from './craftcore.js';
+import { buildIndex, computeList, costIndex, searchItems, sourcesOf, mainRecipe, monsterItemIds, RARITY_CLASS } from './craftcore.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const fmtN = n => Number(n).toLocaleString('fr-FR');
+const fmtK = n => `${fmtN(Math.round(n))} kamas`;
 // Icônes de métier actuelles du jeu (web/icons/metiers), émoji en secours.
 const JOB_FILE = {
   Paysan: 'paysan', Forestier: 'forestier', Herboriste: 'herboriste', Mineur: 'mineur', Pêcheur: 'pecheur',
@@ -170,11 +171,17 @@ export async function renderCraft() {
 
   // résumé
   const missingCount = res.base.filter(b => b.missing > 0).length;
+  const prix = ctx.prices();
+  const cost = costIndex(IDX, prix);
+  const toBuy = res.base.filter(b => b.missing > 0);
+  const unpriced = toBuy.filter(b => !prix[b.id]).length;
+  const left = toBuy.reduce((t, b) => t + (prix[b.id] || 0) * b.missing, 0);
   const jobs = Object.entries(res.jobs).sort((a, b) => b[1] - a[1]);
   $('#craftSummary').innerHTML = `
     <div class="stat"><b>${res.base.length}</b><span>ressources</span></div>
     <div class="stat"><b>${missingCount}</b><span>encore à réunir</span></div>
     <div class="stat"><b>${res.crafts.filter(x => x.runs > 0).length}</b><span>fabrications</span></div>
+    <div class="stat" title="Ce qui reste à réunir, au prix saisi dans la colonne Prix"><b>${left ? fmtN(Math.round(left)) : '—'}</b><span>kamas restants${unpriced && toBuy.length ? ` · ${unpriced} sans prix` : ''}</span></div>
     <div class="jobs">${jobs.map(([j, l]) => `<span class="chip">${jobIcon(j, '')} ${escapeHtml(j)} ${l}</span>`).join('')}</div>`;
 
   // ressources
@@ -185,14 +192,19 @@ export async function renderCraft() {
   $('#craftBase').innerHTML = rows.filter(b => !hideDone || b.missing > 0).map(b => {
     const bought = !!c.acheter[b.id];
     const srcs = sourcesOf(b.o).filter(s => !(s.kind === 'recette' && !bought));
+    const p = prix[b.id] || 0;
+    const mk = bought ? cost(b.id).craft : null;
+    const vs = mk != null && p ? (mk < p ? ` · <span class="cheaper">fabriquer : ${fmtK(mk)}/u, moins cher</span>` : ` · fabriquer : ${fmtK(mk)}/u`)
+      : mk != null ? ` · fabriquer : ${fmtK(mk)}/u` : '';
     return `<tr class="${b.missing > 0 ? '' : 'done'}" data-id="${b.id}">
-      <td class="name">${itemLabel(b.o)}<div class="sub">Niv. ${b.o.niveau} · ${escapeHtml(rarityName(b.o.rarete))}${bought ? ' · <button class="link" type="button" data-craft-again>fabriquer à nouveau</button>' : ''}</div></td>
+      <td class="name">${itemLabel(b.o)}<div class="sub">Niv. ${b.o.niveau} · ${escapeHtml(rarityName(b.o.rarete))}${bought ? ' · <button class="link" type="button" data-craft-again>fabriquer à nouveau</button>' : ''}${vs}</div></td>
       <td class="num"><b>${fmtN(b.need)}</b></td>
       <td class="num"><input class="have" type="number" min="0" value="${c.stock[b.id] || 0}" data-have aria-label="J'en ai"></td>
       <td class="num ${b.missing > 0 ? 'miss' : 'ok'}">${b.missing > 0 ? fmtN(b.missing) : '✓'}</td>
+      <td class="num price"><input class="have" type="number" min="0" step="1" value="${p || ''}" placeholder="—" data-price aria-label="Prix unitaire en kamas" title="Prix unitaire (HDV) en kamas">${p && b.missing > 0 ? `<div class="sub">${fmtK(p * b.missing)}</div>` : ''}</td>
       <td class="where"><div class="srcs">${srcs.map(srcHtml).join('') || '<span class="muted small">provenance inconnue (marché)</span>'}</div></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="5" class="empty-small">Tout est réuni 🎉</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="empty-small">Tout est réuni 🎉</td></tr>';
 
   renderOverlay();
 
@@ -201,12 +213,20 @@ export async function renderCraft() {
     const o = IDX.byId.get(x.id);
     const isTarget = c.cibles.some(t => t.id === x.id);
     const yieldQ = x.recipe.quantite || 1;
+    const k = cost(x.id);
+    let cmp = '';
+    if (k.craft != null && k.buy != null) {
+      cmp = k.buy < k.craft
+        ? `<span class="cost cheaper">acheter : ${fmtK(k.buy)}/u, moins cher que fabriquer (${fmtK(k.craft)}/u)</span>`
+        : `<span class="cost">fabriquer : ${fmtK(k.craft)}/u, moins cher qu'acheter (${fmtK(k.buy)}/u)</span>`;
+    } else if (k.craft != null) cmp = `<span class="cost">fabriquer : ${fmtK(k.craft)}/u</span>`;
     return `<li class="${x.runs === 0 ? 'done' : ''}" data-id="${x.id}">
       <span class="job">${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(x.recipe.metier)} ${x.recipe.niveau}</span>
       <span class="what">${x.runs > 0 ? `<b>${fmtN(x.runs)}×</b>` : '<b>✓</b>'} ${itemLabel(o)}${yieldQ > 1 ? ` <span class="muted small">(${yieldQ} par fabrication)</span>` : ''}
-        ${x.have ? `<span class="muted small">· ${fmtN(x.have)} déjà en stock</span>` : ''}</span>
+        ${x.have ? `<span class="muted small">· ${fmtN(x.have)} déjà en stock</span>` : ''}${cmp}</span>
       <span class="step-actions">
         <input class="have" type="number" min="0" value="${c.stock[x.id] || 0}" data-have title="Déjà en stock" aria-label="Déjà en stock">
+        <input class="have" type="number" min="0" step="1" value="${prix[x.id] || ''}" placeholder="Prix" data-price title="Prix unitaire à l'HDV (kamas), pour comparer avec la fabrication" aria-label="Prix unitaire en kamas">
         ${isTarget ? '' : '<button class="btn small ghost" type="button" data-buy title="Ne pas fabriquer : l\'ajouter aux courses">Acheter</button>'}
       </span>
     </li>`;
@@ -305,8 +325,18 @@ function bindCraft() {
     if (v) c.stock[id] = v; else delete c.stock[id];
     ctx.saveCraft(); renderCraft();
   };
-  $('#craftBase').addEventListener('change', onHave);
-  $('#craftSteps').addEventListener('change', onHave);
+  const onPrice = e => {
+    if (!e.target.matches('[data-price]')) return;
+    const id = +e.target.closest('[data-id]').dataset.id;
+    const prix = ctx.prices();
+    const v = Math.min(1e10, Math.max(0, Math.round(+e.target.value) || 0));
+    if (v) prix[id] = v; else delete prix[id];
+    ctx.saveCraft(); renderCraft();
+  };
+  for (const box of [$('#craftBase'), $('#craftSteps')]) {
+    box.addEventListener('change', onHave);
+    box.addEventListener('change', onPrice);
+  }
   $('#craftSteps').addEventListener('click', e => {
     if (!e.target.closest('[data-buy]')) return;
     const id = +e.target.closest('[data-id]').dataset.id;
@@ -334,7 +364,14 @@ function bindCraft() {
     const c = ctx.getCraft();
     const res = computeList(IDX, c.cibles, { stock: c.stock, buy: c.acheter });
     const lines = [...(ctx.lists.all().length > 1 ? [`Liste : ${ctx.lists.activeName()}`, ''] : []), 'Objectifs :', ...c.cibles.map(t => `- ${t.qte} × ${IDX.byId.get(t.id).nom}`), '', 'À réunir :'];
-    for (const b of res.base.filter(x => x.missing > 0)) lines.push(`- ${b.missing} × ${IDX.byId.get(b.id).nom}`);
+    const prix = ctx.prices();
+    let total = 0;
+    for (const b of res.base.filter(x => x.missing > 0)) {
+      const p = prix[b.id];
+      total += (p || 0) * b.missing;
+      lines.push(`- ${b.missing} × ${IDX.byId.get(b.id).nom}${p ? ` (${fmtK(p * b.missing)})` : ''}`);
+    }
+    if (total) lines.push(`Total : ${fmtK(total)}`);
     lines.push('', 'Fabrications :');
     for (const x of res.crafts.filter(y => y.runs > 0)) lines.push(`- ${x.runs} × ${IDX.byId.get(x.id).nom} (${x.recipe.metier} ${x.recipe.niveau})`);
     try { await navigator.clipboard.writeText(lines.join('\n')); ctx.toast('Liste copiée.', 'ok'); }
@@ -732,17 +769,30 @@ function guessVersion(versions, lines) {
     const k = scanKey(rarityName(v.rarete));
     return k && text.includes(` ${k} `);
   });
-  return i < 0 ? 0 : i;
+  return i;
 }
 
-function scanChoice(versions, lines) {
+/** Composants de la liste active (ressources et fabrications intermédiaires) : id -> { need, have }. */
+function listComponents() {
+  const c = ctx.getCraft();
+  const res = computeList(IDX, c.cibles, { stock: c.stock, buy: c.acheter });
+  const comp = new Map();
+  for (const b of res.base) comp.set(b.id, { need: b.need, have: c.stock[b.id] || 0 });
+  for (const x of res.crafts) if (!c.cibles.some(t => t.id === x.id)) comp.set(x.id, { need: x.need, have: c.stock[x.id] || 0 });
+  return comp;
+}
+
+function scanChoice(versions, lines, comp) {
   const inList = new Map(ctx.getCraft().cibles.map(t => [t.id, t.qte]));
+  let sel = guessVersion(versions, lines);
+  if (sel < 0) sel = Math.max(0, versions.findIndex(v => comp.has(v.id)));
   const labels = versions.map(v => rarityName(v.rarete) || 'Commun');
   return {
     state: 'choose',
-    sel: guessVersion(versions, lines),
+    sel,
     versions: versions.map((o, i) => {
       const r = mainRecipe(o);
+      const k = comp.get(o.id);
       const dup = labels.filter(l => l === labels[i]).length > 1;
       return {
         id: o.id,
@@ -750,8 +800,10 @@ function scanChoice(versions, lines) {
         label: labels[i] + (dup ? ` · Niv. ${o.niveau}` : ''),
         cls: RARITY_CLASS[o.rarete] || 'commun',
         icon: itemIcon(o, { cls: 'big' }),
-        meta: `${escapeHtml(o.type)} · Niv. ${o.niveau} · ${jobIcon(r.metier, '')} ${escapeHtml(r.metier)} ${r.niveau}`,
+        meta: `${escapeHtml(o.type)} · Niv. ${o.niveau}${r ? ` · ${jobIcon(r.metier, '')} ${escapeHtml(r.metier)} ${r.niveau}` : ''}`,
         inList: inList.get(o.id) || 0,
+        craftable: !!r,
+        comp: k ? { need: k.need, have: k.have, missing: Math.max(0, k.need - k.have) } : null,
       };
     }),
   };
@@ -760,6 +812,15 @@ function scanChoice(versions, lines) {
 // réponses de la fenêtre de scan (appli PC)
 window.wfScanAdd = (id, qte) => addTarget(IDX?.byId.get(id), Math.min(9999, Math.max(1, Math.floor(qte) || 1)));
 window.wfScanItem = id => openItem(id);
+// « J'en ai » : la ressource scannée s'ajoute au stock de la liste active
+window.wfScanHave = (id, qte) => {
+  const o = IDX?.byId.get(id);
+  if (!o) return;
+  const c = ctx.getCraft();
+  c.stock[id] = Math.min(999999, (c.stock[id] || 0) + Math.max(1, Math.floor(qte) || 1));
+  ctx.saveCraft();
+  renderCraft();
+};
 
 export async function handleScan(r) {
   if (!r) return;
@@ -779,12 +840,17 @@ export async function handleScan(r) {
   }
   const craftable = found.filter(o => mainRecipe(o)).sort((a, b) => a.rarete - b.rarete || a.niveau - b.niveau);
   const name = found[0].nom;
+  if (win) {
+    // une ressource de la liste peut aussi être ajoutée à « j'ai », même si elle ne se fabrique pas
+    const comp = listComponents();
+    const usable = found.filter(o => mainRecipe(o) || comp.has(o.id)).sort((a, b) => a.rarete - b.rarete || a.niveau - b.niveau);
+    if (usable.length) { ctx.native.scanShow(scanChoice(usable, r.lines, comp)); return; }
+  }
   if (!craftable.length) {
-    tell(`<b>${escapeHtml(name)}</b> ne se fabrique pas.`, 'warn', `${name} ne se fabrique pas.`, found[0].id);
+    tell(`<b>${escapeHtml(name)}</b> ne se fabrique pas${win ? ' et ne fait pas partie de ta liste' : ''}.`, 'warn', `${name} ne se fabrique pas.`, found[0].id);
     if (!win) openItem(found[0].id);
     return;
   }
-  if (win) { ctx.native.scanShow(scanChoice(craftable, r.lines)); return; }
   if (craftable.length === 1) {
     addTarget(craftable[0], 1);
     if (!document.hasFocus()) ctx.native?.notify("Wak'Forge", `Ajouté à la liste : ${name}`);

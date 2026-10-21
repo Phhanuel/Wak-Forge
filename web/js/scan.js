@@ -39,9 +39,11 @@ function render() {
     <div class="sp-qty"><div class="stepper"><button type="button" data-sp-step="-1" aria-label="Moins">−</button>
       <input type="number" min="1" max="9999" value="${pop.qte}" data-sp-qte aria-label="Quantité">
       <button type="button" data-sp-step="1" aria-label="Plus">+</button></div>
-      ${o.inList ? `<span class="muted">déjà ${fmtN(o.inList)} dans la liste</span>` : ''}</div>
+      ${o.comp ? `<span class="muted">besoin ${fmtN(o.comp.need)} · j'ai ${fmtN(o.comp.have)}</span>`
+        : o.inList ? `<span class="muted">déjà ${fmtN(o.inList)} dans la liste</span>` : ''}</div>
     <footer class="sp-foot"><button class="btn small ghost" type="button" data-sp-close>Annuler</button>
-      <button class="btn small primary" type="button" data-sp-ok>Ajouter à la liste</button></footer>
+      ${o.comp ? `<button class="btn small primary" type="button" data-sp-have title="Ajouter cette quantité à « j'ai » dans la liste">J'en ai</button>` : ''}
+      ${o.craftable ? `<button class="btn small ${o.comp ? '' : 'primary'}" type="button" data-sp-ok>${o.comp ? 'À fabriquer' : 'Ajouter à la liste'}</button>` : ''}</footer>
   </div>`;
   const input = root.querySelector('[data-sp-qte]');
   input.focus();
@@ -53,19 +55,35 @@ function readQte() {
   return Math.min(9999, Math.max(1, v || 1));
 }
 
-function confirm() {
+/** Quantité proposée : ce qui manque pour une ressource de la liste, sinon 1. */
+const defaultQte = o => (o.comp?.missing > 0 ? Math.min(9999, o.comp.missing) : 1);
+
+// have = true : la quantité va dans « j'ai » (ressource de la liste, choix par défaut), sinon dans les objets à fabriquer
+function confirm(have = !!pop?.versions?.[pop.sel]?.comp) {
   if (pop?.state !== 'choose') return;
   const o = pop.versions[pop.sel];
+  if (have ? !o.comp : !o.craftable) return;
   const qte = readQte();
-  call('nativeScanAdd', o.id, qte);
-  pop = { state: 'done', html: `<b>${fmtN(qte)} × ${escapeHtml(o.nom)}</b> ajouté à la liste.` };
+  call(have ? 'nativeScanHave' : 'nativeScanAdd', o.id, qte);
+  pop = { state: 'done', html: have ? `<b>+${fmtN(qte)} ${escapeHtml(o.nom)}</b> dans « j'ai ».` : `<b>${fmtN(qte)} × ${escapeHtml(o.nom)}</b> ajouté à la liste.` };
   render();
   setTimeout(() => { if (pop?.state === 'done') closeWin(); }, 600);
 }
 
+/** Change de rareté ; la quantité suit si on passe d'une ressource de la liste à une autre version. */
+function selectVersion(i) {
+  const before = pop.versions[pop.sel];
+  pop.qte = readQte();
+  pop.sel = i;
+  const now = pop.versions[i];
+  if (!!before.comp !== !!now.comp || (now.comp && pop.qte === defaultQte(before))) pop.qte = defaultQte(now);
+  render();
+}
+
 /** Appelé par l'appli PC : nouvel état à afficher. */
 window.wfPop = state => {
-  pop = { qte: 1, sel: 0, ...state };
+  pop = { sel: 0, ...state };
+  if (pop.state === 'choose') pop.qte = defaultQte(pop.versions[pop.sel]);
   render();
 };
 
@@ -73,9 +91,10 @@ root.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || !pop) return;
   if (b.matches('[data-sp-close]')) { closeWin(); return; }
-  if (b.matches('[data-sp-ok]')) { confirm(); return; }
+  if (b.matches('[data-sp-ok]')) { confirm(false); return; }
+  if (b.matches('[data-sp-have]')) { confirm(true); return; }
   if (b.matches('[data-sp-item]')) { const id = pop.itemId; pop = null; render(); call('nativeScanItem', id); return; }
-  if (b.matches('[data-sp-rar]')) { pop.qte = readQte(); pop.sel = +b.dataset.spRar; render(); return; }
+  if (b.matches('[data-sp-rar]')) { selectVersion(+b.dataset.spRar); return; }
   if (b.matches('[data-sp-step]')) {
     const input = root.querySelector('[data-sp-qte]');
     input.value = Math.min(9999, Math.max(1, readQte() + +b.dataset.spStep * (e.shiftKey ? 10 : 1)));
@@ -88,11 +107,9 @@ document.addEventListener('keydown', e => {
   if (!pop) return;
   if (pop.state === 'msg' && e.key === 'Enter' && !e.target.closest('[data-sp-item]')) { e.preventDefault(); closeWin(); return; }
   if (pop.state !== 'choose') return;
-  if (e.key === 'Enter') { e.preventDefault(); confirm(); return; }
+  if (e.key === 'Enter' && !e.target.closest('button')) { e.preventDefault(); confirm(); return; }
   if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && pop.versions.length > 1) {
     e.preventDefault();
-    pop.qte = readQte();
-    pop.sel = (pop.sel + (e.key === 'ArrowRight' ? 1 : -1) + pop.versions.length) % pop.versions.length;
-    render();
+    selectVersion((pop.sel + (e.key === 'ArrowRight' ? 1 : -1) + pop.versions.length) % pop.versions.length);
   }
 });

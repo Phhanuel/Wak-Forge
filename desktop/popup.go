@@ -104,6 +104,9 @@ func newScanWindow(main webview2.WebView, mainWnd uintptr) *scanWindow {
 	_ = view.Bind("nativeScanAdd", func(id, qte int) {
 		main.Dispatch(func() { main.Eval(fmt.Sprintf("window.wfScanAdd && window.wfScanAdd(%d, %d)", id, qte)) })
 	})
+	_ = view.Bind("nativeScanHave", func(id, qte int) {
+		main.Dispatch(func() { main.Eval(fmt.Sprintf("window.wfScanHave && window.wfScanHave(%d, %d)", id, qte)) })
+	})
 	_ = view.Bind("nativeScanClose", func() {
 		main.Dispatch(func() { s.close(true) })
 	})

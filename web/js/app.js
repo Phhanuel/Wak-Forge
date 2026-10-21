@@ -7,7 +7,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.13.0';
+const APP_VERSION = '2.14.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -59,6 +59,7 @@ function defaultState() {
     craft,          // liste de craft active (même objet que son entrée dans « listes »)
     listes: [{ id: 'l1', nom: 'Ma liste', craft }],  // toutes les listes de craft
     listeActive: 'l1',
+    prix: {},       // id -> prix unitaire en kamas (commun à toutes les listes)
     settings: defaultSettings(),
     updatedAt: 0,
   };
@@ -104,6 +105,10 @@ function sanitizeState(raw) {
     }
   }
   sanitizeListes(s, raw);
+  for (const [id, v] of Object.entries(raw.prix || {})) {
+    const n = Math.round(+v);
+    if (+id > 0 && n > 0) s.prix[+id] = Math.min(n, 1e10);
+  }
   const st = raw.settings || {};
   s.settings = {
     sound: st.sound !== false,
@@ -969,6 +974,7 @@ function mergeInto(other) {
   }
   if (!craftEmpty(other.craft)) setActiveCraft(other.craft);
   addMissingLists(other);
+  Object.assign(state.prix, other.prix);
 }
 
 /** Remplace le contenu de la liste active. */
@@ -1032,9 +1038,9 @@ function addMissingLists(other) {
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Effacer tous tes timers, durées perso et archimonstres ajoutés ?' + (sync.user ? '\nCela s\'applique aussi à ton compte.' : ''))) return;
   const settings = state.settings;
-  const { craft, listes, listeActive } = state;
+  const { craft, listes, listeActive, prix } = state;
   state = defaultState();
-  Object.assign(state, { settings, craft, listes, listeActive });
+  Object.assign(state, { settings, craft, listes, listeActive, prix });
   refreshCatalog(); persist(); persistDevice();
   renderTimers(true); renderBestiary();
   toast('Tout a été effacé.');
@@ -1150,6 +1156,7 @@ function applyRemote(remote, merge) {
     }
     if (craftEmpty(state.craft) && !craftEmpty(local.craft)) setActiveCraft(local.craft);
     addMissingLists(local);
+    for (const [id, v] of Object.entries(local.prix)) if (!state.prix[id]) state.prix[id] = v;
     state.updatedAt = Date.now();
     markPastAsNotified();
     refreshCatalog();
@@ -1254,6 +1261,7 @@ async function main() {
   initCraft({
     getCraft: () => state.craft,
     lists: craftLists,
+    prices: () => state.prix,
     archiInfo,
     native,
     archiLaunch: launchArchi,
