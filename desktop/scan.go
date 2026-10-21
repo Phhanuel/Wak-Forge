@@ -1,10 +1,10 @@
-// Scan d'objet : Ctrl+D au-dessus d'un objet dans WAKFU.
+// Scan d'objet : Ctrl+D (à fabriquer) ou Ctrl+F (« j'en ai ») au-dessus d'un objet dans WAKFU.
 //
 // L'appli ne touche pas au jeu : elle fait une capture d'écran locale autour de la souris,
 // la lit avec la reconnaissance de texte intégrée à Windows (Windows.Media.Ocr, via PowerShell),
 // et envoie les lignes lues à la page, qui retrouve l'objet dans data_item.json.
-// Le raccourci n'est enregistré que lorsque la fenêtre de WAKFU est au premier plan :
-// Ctrl+D garde son rôle habituel dans les autres applis.
+// Les raccourcis ne sont enregistrés que lorsque la fenêtre de WAKFU est au premier plan :
+// Ctrl+D et Ctrl+F gardent leur rôle habituel dans les autres applis.
 
 package main
 
@@ -53,10 +53,12 @@ var (
 )
 
 const (
-	hotkeyID     = 0x5743 // « WC »
+	hotkeyID     = 0x5743 // « WC » : Ctrl+D, objet à fabriquer
+	hotkeyHaveID = 0x5744 // Ctrl+F : ressource à ajouter à « j'ai »
 	modControl   = 0x0002
 	modNoRepeat  = 0x4000
 	vkD          = 0x44
+	vkF          = 0x46
 	wmHotkey     = 0x0312
 	pmRemove     = 0x0001
 	srcCopy      = 0x00CC0020
@@ -97,6 +99,7 @@ type bitmapInfoHeader struct {
 // scanResult est envoyé à la page (window.wfScan).
 type scanResult struct {
 	Pending bool     `json:"pending,omitempty"`
+	Mode    string   `json:"mode,omitempty"` // "have" pour Ctrl+F
 	Lines   []string `json:"lines,omitempty"`
 	Error   string   `json:"error,omitempty"`
 }
@@ -116,11 +119,13 @@ func startScanHotkey(self uintptr, send func(scanResult)) {
 			want := scanEnabled.Load() && wakfuInFront(self)
 			if want && !registered {
 				r, _, _ := procRegisterHotKey.Call(0, hotkeyID, modControl|modNoRepeat, vkD)
-				registered = r != 0
+				r2, _, _ := procRegisterHotKey.Call(0, hotkeyHaveID, modControl|modNoRepeat, vkF)
+				registered = r != 0 || r2 != 0
 				hotkeyOK.Store(registered)
-				regFailed.Store(!registered)
+				regFailed.Store(r == 0 || r2 == 0)
 			} else if !want && registered {
 				procUnregisterHotKey.Call(0, hotkeyID)
+				procUnregisterHotKey.Call(0, hotkeyHaveID)
 				registered = false
 				hotkeyOK.Store(false)
 			}
@@ -129,17 +134,23 @@ func startScanHotkey(self uintptr, send func(scanResult)) {
 				if r == 0 {
 					break
 				}
-				if msg.Message == wmHotkey && msg.WParam == hotkeyID && busy.CompareAndSwap(false, true) {
+				if msg.Message == wmHotkey && (msg.WParam == hotkeyID || msg.WParam == hotkeyHaveID) && busy.CompareAndSwap(false, true) {
+					mode := ""
+					if msg.WParam == hotkeyHaveID {
+						mode = "have"
+					}
 					// capture AVANT d'ouvrir le panneau de scan : sinon il recouvre l'infobulle
 					// (et la capture peut échouer pendant que la fenêtre change de forme)
 					rememberScanOrigin()
 					img, err := captureAroundCursor()
-					send(scanResult{Pending: true})
+					send(scanResult{Pending: true, Mode: mode})
 					go func() {
 						if err != nil {
-							send(scanResult{Error: "Capture d'écran impossible : " + err.Error()})
+							send(scanResult{Error: "Capture d'écran impossible : " + err.Error(), Mode: mode})
 						} else {
-							send(readImage(img))
+							r := readImage(img)
+							r.Mode = mode
+							send(r)
 						}
 						busy.Store(false)
 					}()
@@ -166,7 +177,7 @@ var (
 	lastFgMu  sync.Mutex
 	lastFg    fgInfo
 	hotkeyOK  atomic.Bool
-	regFailed atomic.Bool // Windows a refusé Ctrl+D (déjà pris par un autre programme)
+	regFailed atomic.Bool // Windows a refusé Ctrl+D ou Ctrl+F (déjà pris par un autre programme)
 )
 
 func scanStatus() fgInfo {

@@ -7,7 +7,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.14.0';
+const APP_VERSION = '2.14.1';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -859,9 +859,9 @@ async function refreshScanStatus() {
   }
   const what = `${st.exe || 'programme inconnu'}${st.title ? ` « ${st.title} »` : ''}`;
   el.textContent = st.game && st.regFailed
-    ? `Dernière fenêtre active : ${what}, reconnue comme le jeu, mais Windows refuse Ctrl+D : un autre programme l'utilise déjà.`
+    ? `Dernière fenêtre active : ${what}, reconnue comme le jeu, mais Windows refuse Ctrl+D ou Ctrl+F : un autre programme utilise déjà ce raccourci.`
     : st.game
-    ? `✓ Dernière fenêtre active : ${what}, reconnue comme le jeu. Ctrl+D y est actif.`
+    ? `✓ Dernière fenêtre active : ${what}, reconnue comme le jeu. Ctrl+D et Ctrl+F y sont actifs.`
     : `Dernière fenêtre active : ${what}, ce n'est pas le jeu. Passe sur WAKFU puis reviens vérifier.`;
   el.className = `scan-status ${st.game && !st.regFailed ? 'ok' : ''}`;
 }

@@ -13,7 +13,7 @@ let pop = null; // { state, versions, sel, qte, … }
 
 function render() {
   if (!pop) { root.innerHTML = ''; return; }
-  const head = `<header class="sp-head"><b>Scan d'objet</b><button class="ovl-btn" type="button" data-sp-close title="Fermer (Échap)" aria-label="Fermer">✕</button></header>`;
+  const head = `<header class="sp-head"><b>${pop.mode === 'have' ? 'J\'en ai' : 'Scan d\'objet'}</b><button class="ovl-btn" type="button" data-sp-close title="Fermer (Échap)" aria-label="Fermer">✕</button></header>`;
   if (pop.state === 'loading') {
     root.innerHTML = `<div class="sp">${head}<div class="sp-msg"><span class="sp-spin"></span>Lecture de l'objet sous la souris…</div></div>`;
     return;
@@ -39,11 +39,12 @@ function render() {
     <div class="sp-qty"><div class="stepper"><button type="button" data-sp-step="-1" aria-label="Moins">−</button>
       <input type="number" min="1" max="9999" value="${pop.qte}" data-sp-qte aria-label="Quantité">
       <button type="button" data-sp-step="1" aria-label="Plus">+</button></div>
-      ${o.comp ? `<span class="muted">besoin ${fmtN(o.comp.need)} · j'ai ${fmtN(o.comp.have)}</span>`
+      ${pop.mode === 'have' && o.comp ? `<span class="muted">besoin ${fmtN(o.comp.need)} · j'ai ${fmtN(o.comp.have)}</span>`
         : o.inList ? `<span class="muted">déjà ${fmtN(o.inList)} dans la liste</span>` : ''}</div>
     <footer class="sp-foot"><button class="btn small ghost" type="button" data-sp-close>Annuler</button>
-      ${o.comp ? `<button class="btn small primary" type="button" data-sp-have title="Ajouter cette quantité à « j'ai » dans la liste">J'en ai</button>` : ''}
-      ${o.craftable ? `<button class="btn small ${o.comp ? '' : 'primary'}" type="button" data-sp-ok>${o.comp ? 'À fabriquer' : 'Ajouter à la liste'}</button>` : ''}</footer>
+      ${pop.mode === 'have'
+        ? '<button class="btn small primary" type="button" data-sp-have title="Ajouter cette quantité à « J\'ai » dans la liste">Ajouter à « J\'ai »</button>'
+        : '<button class="btn small primary" type="button" data-sp-ok>Ajouter à la liste</button>'}</footer>
   </div>`;
   const input = root.querySelector('[data-sp-qte]');
   input.focus();
@@ -56,10 +57,10 @@ function readQte() {
 }
 
 /** Quantité proposée : ce qui manque pour une ressource de la liste, sinon 1. */
-const defaultQte = o => (o.comp?.missing > 0 ? Math.min(9999, o.comp.missing) : 1);
+const defaultQte = o => (pop?.mode === 'have' && o.comp?.missing > 0 ? Math.min(9999, o.comp.missing) : 1);
 
-// have = true : la quantité va dans « j'ai » (ressource de la liste, choix par défaut), sinon dans les objets à fabriquer
-function confirm(have = !!pop?.versions?.[pop.sel]?.comp) {
+// Ctrl+F (mode « have ») : la quantité va dans « J'ai » ; Ctrl+D : dans les objets à fabriquer
+function confirm(have = pop?.mode === 'have') {
   if (pop?.state !== 'choose') return;
   const o = pop.versions[pop.sel];
   if (have ? !o.comp : !o.craftable) return;
@@ -70,13 +71,13 @@ function confirm(have = !!pop?.versions?.[pop.sel]?.comp) {
   setTimeout(() => { if (pop?.state === 'done') closeWin(); }, 600);
 }
 
-/** Change de rareté ; la quantité suit si on passe d'une ressource de la liste à une autre version. */
+/** Change de rareté ; la quantité proposée suit, sauf si elle a été modifiée à la main. */
 function selectVersion(i) {
   const before = pop.versions[pop.sel];
   pop.qte = readQte();
   pop.sel = i;
   const now = pop.versions[i];
-  if (!!before.comp !== !!now.comp || (now.comp && pop.qte === defaultQte(before))) pop.qte = defaultQte(now);
+  if (pop.qte === defaultQte(before)) pop.qte = defaultQte(now);
   render();
 }
 
