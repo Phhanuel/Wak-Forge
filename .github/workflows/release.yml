@@ -30,6 +30,8 @@ jobs:
           node-version: 22
       - name: Vérifier le fichier de données
         run: node scripts/check-data.mjs
+      - name: Tests des calculs de craft
+        run: npm test
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'

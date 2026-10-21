@@ -1,0 +1,37 @@
+name: Captures du README
+
+# Refait docs/capture.png et docs/bestiaire.png avec une liste d'exemple (à lancer depuis l'onglet Actions).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  captures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Installer le navigateur
+        run: |
+          npm i --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Prendre les captures
+        run: |
+          python3 -m http.server 8080 --directory web >/dev/null 2>&1 &
+          sleep 2
+          node scripts/captures.mjs http://127.0.0.1:8080/
+      - name: Enregistrer si modifié
+        run: |
+          if git diff --quiet -- docs; then
+            echo "Aucun changement."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs
+            git commit -m "README : nouvelles captures"
+            git push
+          fi

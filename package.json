@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "check": "node scripts/check-data.mjs",
-    "serve": "python3 -m http.server 8080 --directory web"
+    "serve": "python3 -m http.server 8080 --directory web",
+    "test": "node --test tests/*.test.mjs",
+    "captures": "node scripts/captures.mjs"
   }
 }
