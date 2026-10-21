@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
-const { buildGamedata } = createRequire(import.meta.url)('../scripts/gamedata/build.cjs');
+const { buildGamedata, englishFromTable } = createRequire(import.meta.url)('../scripts/gamedata/build.cjs');
 
 const CDN = {
   'config.json': { version: '1.0' },
@@ -43,4 +43,14 @@ test('wiki en panne sans données précédentes : erreur', async () => {
   try {
     await assert.rejects(buildGamedata({}), /502/);
   } finally { globalThis.fetch = realFetch; }
+});
+
+test('familles et zones anglaises tirées de la table des noms français', () => {
+  const res = {
+    data_bestiaire: { monstres: [{ nom: 'Bouftou', famille: 'Bouftous', zones: ["Mine d'Amakna - Tréfonds", 'Inconnue'] }, { nom: 'Mimic', famille: 'Mimics' }] },
+    data_en: { familles: {}, zones: {} },
+  };
+  englishFromTable(res, { familles: { gobballs: 'Bouftous', mimics: 'Mimics' }, zones: { 'amakna mine - depths': "Mine d'Amakna - Tréfonds", 'citadel of horror': 'Citadelle' } });
+  assert.deepEqual(res.data_en.familles, { Bouftous: 'Gobballs' });
+  assert.deepEqual(res.data_en.zones, { "Mine d'Amakna - Tréfonds": 'Amakna Mine - Depths' });
 });
