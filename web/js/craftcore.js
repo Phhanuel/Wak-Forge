@@ -153,3 +153,34 @@ export function monsterItemIds(m) {
   for (const d of m.trappeur?.items || []) if (d.id) ids.push(d.id);
   return ids;
 }
+
+/**
+ * Coût unitaire d'un objet d'après les prix saisis (kamas) : prix d'achat, coût de fabrication
+ * (ingrédients au meilleur prix, divisé par la quantité produite) et le moins cher des deux.
+ * Une valeur inconnue vaut null (prix manquant pour l'objet ou l'un de ses ingrédients).
+ * @returns (id) => { buy, craft, best }
+ */
+export function costIndex(index, prices = {}) {
+  const memo = new Map();
+  const cost = id => {
+    if (memo.has(id)) return memo.get(id);
+    const p = +prices[id] > 0 ? +prices[id] : null;
+    const out = { buy: p, craft: null, best: p };
+    memo.set(id, out); // une recette circulaire s'arrête ici
+    const r = mainRecipe(index.byId.get(id));
+    if (r) {
+      let sum = 0;
+      for (const [ing, q] of r.ingredients) {
+        const c = cost(ing).best;
+        if (c == null) { sum = null; break; }
+        sum += c * q;
+      }
+      if (sum != null) {
+        out.craft = sum / (r.quantite || 1);
+        out.best = p == null ? out.craft : Math.min(p, out.craft);
+      }
+    }
+    return out;
+  };
+  return cost;
+}
