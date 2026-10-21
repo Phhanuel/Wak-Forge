@@ -39,6 +39,12 @@
   </header>
 
   <main>
+    <div class="update-bar" id="updateBar" role="status" hidden>
+      <span class="update-text" id="updateText"></span>
+      <button class="btn small primary" type="button" id="updateGo">Mettre à jour</button>
+      <button class="btn small ghost" type="button" id="updateLater">Plus tard</button>
+    </div>
+
     <!-- ============ TIMERS ============ -->
     <section class="view" id="view-timers" hidden>
       <div class="launcher">
@@ -81,6 +87,7 @@
     <section class="view" id="view-craft">
       <p class="loading">Chargement des données du jeu…</p>
       <div class="view-body" hidden>
+        <div class="craft-lists" id="craftLists" role="tablist" aria-label="Mes listes de craft"></div>
         <div class="launcher">
           <div class="search">
             <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.2-4.2"/></svg>

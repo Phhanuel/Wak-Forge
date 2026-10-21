@@ -13,6 +13,7 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 ### Craft et bestiaire
 
 - **Craft – liste de courses** : choisis les objets à fabriquer et leurs quantités. Wak'Forge calcule toutes les ressources de base, recettes intermédiaires comprises, avec pour chacune où la trouver : récolte (métier, niveau, ressource), trappeur ou drops (monstres, taux). Tu indiques ce que tu as déjà, tu peux choisir d'acheter un composant plutôt que de le fabriquer, et tu obtiens les étapes de fabrication dans l'ordre ainsi que les niveaux de métier nécessaires.
+- **Plusieurs listes** : garde une liste par projet (« Panoplie 200 », « Reroll »…) et passe de l'une à l'autre avec les onglets au-dessus de la recherche. Double-clic sur l'onglet (ou ✎) pour renommer, × pour supprimer. Chaque liste a ses objectifs et ses quantités « j'ai ».
 - **Overlay** : le bouton **⧉ Overlay** de la liste de courses ouvre une version compacte qui reste par-dessus le jeu. On y coche ce qu'on récolte au fur et à mesure (+1, Maj + clic : +10), et tout reste synchronisé avec la liste complète.
   - **Appli PC** : la fenêtre passe en petit format, toujours au premier plan, avec une opacité réglable. Le bouton ⤢ la remet en grand.
   - **Chrome / Edge** : une fenêtre flottante (Picture-in-Picture) qui reste au-dessus des autres applis.
@@ -48,6 +49,8 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 
 > Au premier lancement, Windows SmartScreen peut afficher « Windows a protégé votre ordinateur » parce que l'exe n'est pas signé.
 > Clique sur **Informations complémentaires**, puis sur **Exécuter quand même**.
+
+**Mises à jour** : quand une nouvelle version est publiée, l'appli PC affiche un bandeau. Le bouton **Mettre à jour** télécharge le nouvel exe, le met à la place de l'ancien (dans le même dossier) et relance l'appli. Tes données ne bougent pas.
 
 L'appli PC fonctionne sous Windows 10 et 11. Elle utilise le composant Edge WebView2, déjà inclus dans Windows. Ses données sont dans `%APPDATA%\WakForge` (les données des anciennes versions, « Wak'Up » et « Minuteur Archimonstres », sont reprises automatiquement).
 
