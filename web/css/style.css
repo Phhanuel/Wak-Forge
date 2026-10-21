@@ -351,7 +351,7 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .panel .table-wrap { border: 0; border-radius: 0; background: none; margin: 0 -16px -14px; border-top: 1px solid var(--border); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .panel-head h2 { margin: 0; font-size: 16px; }
-.panel-tools { display: flex; align-items: center; gap: 12px; }
+.panel-tools { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-2); cursor: pointer; }
 .check input { accent-color: var(--accent); }
 .targets { display: grid; gap: 8px; }
@@ -368,6 +368,27 @@ input[type="range"] { accent-color: var(--accent); width: 120px; }
 .summary-row .stat b { font-size: 22px; font-variant-numeric: tabular-nums; }
 .summary-row .stat span { color: var(--text-3); font-size: 14px; }
 .summary-row .jobs { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.summary-row .jobs { align-items: center; }
+.chip.job { cursor: pointer; font-family: inherit; }
+.chip.job:hover { border-color: var(--text-3); }
+.chip.job.ok { color: var(--ok); border-color: rgba(79, 209, 139, .35); background: var(--ok-soft); }
+.chip.job.low { color: var(--danger); border-color: rgba(255, 107, 94, .4); background: var(--danger-soft); }
+.chip.job .mine { font-weight: 500; }
+.jobs-warn { font-size: 13px; color: var(--danger); }
+.jobs-hint { font-size: 12.5px; color: var(--text-3); }
+.src.recolte.low { color: var(--danger); border-color: rgba(255, 107, 94, .35); }
+.steps li.locked .job { color: var(--danger); }
+.steps .lvl-low { font-size: 12px; font-weight: 600; }
+select.select.small { height: 32px; padding: 0 8px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13.5px; max-width: 100%; }
+.craft-table tr.grp th { text-align: left; padding: 14px 12px 6px; background: none; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; color: var(--text); }
+.craft-table tr.grp th .grp-name { display: inline-flex; align-items: center; gap: 6px; }
+.craft-table tr.grp th .link { color: var(--text); text-decoration: none; font-size: 14px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.grp-count { margin-left: 10px; font-size: 12.5px; font-weight: 500; color: var(--text-3); }
+.ovl-list li.ovl-group { justify-content: space-between; padding: 10px 6px 4px; font-size: 13px; font-weight: 700; color: var(--text-2); }
+.ovl-list li.ovl-group .portrait.mini { width: 20px; height: 20px; }
+.jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 14px; }
+.job-input { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--text-2); }
+.job-input input { width: 76px; }
 .craft-table td { vertical-align: middle; }
 .craft-table td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .craft-table td.where { white-space: normal; min-width: 260px; padding-top: 8px; padding-bottom: 8px; }
@@ -497,6 +518,8 @@ input.have::placeholder { color: var(--text-3); }
   .craft-table td.price { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
   .craft-table td.price .sub { margin-top: 0; }
   .craft-table td.where { grid-column: 1 / -1; min-width: 0; padding: 0; }
+  .craft-table tr.grp { display: block; padding: 14px 16px 4px; }
+  .craft-table tr.grp th { display: block; padding: 0 0 6px; }
   .steps li { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; }
   .steps li::before { grid-row: span 3; align-self: start; }
   .steps .step-actions { justify-content: flex-start; }

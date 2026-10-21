@@ -1,6 +1,6 @@
 // Onglets « Craft » (liste de courses) et « Bestiaire » + fiche objet.
 import { norm, escapeHtml } from './util.js';
-import { buildIndex, computeList, costIndex, searchItems, sourcesOf, mainRecipe, monsterItemIds, RARITY_CLASS } from './craftcore.js';
+import { buildIndex, computeList, costIndex, searchItems, sourcesOf, mainRecipe, monsterItemIds, encodeShare, decodeShare, RARITY_CLASS } from './craftcore.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const fmtN = n => Number(n).toLocaleString('fr-FR');
@@ -90,10 +90,59 @@ function monsterByName(name) {
   if (!monsterNames) { monsterNames = new Map(); for (const m of IDX.monsters) if (!monsterNames.has(m.nom)) monsterNames.set(m.nom, m); }
   return monsterNames.get(name) || null;
 }
+// Niveaux de métier saisis par le joueur (Réglages) : renvoie son niveau s'il est trop bas, sinon null.
+const myJobs = () => ctx?.jobs?.() || {};
+function tooLow(metier, niveau) {
+  const l = myJobs()[metier];
+  return l != null && l < niveau ? l : null;
+}
+
+/* Regroupement des ressources à réunir (au choix, mémorisé sur l'appareil) :
+ * par niveau (liste simple), par provenance (métier de récolte ou famille du monstre) ou par monstre. */
+const GROUP_KEY = 'wakforge.craftGroup';
+let groupMode = 'niveau';
+try { groupMode = localStorage.getItem(GROUP_KEY) || 'niveau'; } catch { /* rien */ }
+function monsterGroup(name) {
+  const m = monsterByName(name);
+  return { key: `m:${name}`, html: `<button class="link" type="button" data-monster="${escapeHtml(name)}" title="Voir le monstre">${m?.image ? monsterPortrait(m, { px: 40, cls: 'mini' }) : '⚔'} ${escapeHtml(name)}</button>` };
+}
+function groupOf(o, bought) {
+  const harvest = (o.recolte || []).filter(h => h.metier !== 'Trappeur').sort((a, b) => a.niveau - b.niveau);
+  const trap = (o.recolte || []).filter(h => h.metier === 'Trappeur').sort((a, b) => a.niveau - b.niveau);
+  const drops = [...(o.drops || [])].sort((a, b) => (b.taux ?? 0) - (a.taux ?? 0));
+  if (groupMode === 'monstre') {
+    if (drops.length) return monsterGroup(drops[0].monstre);
+    if (trap.length) return monsterGroup(trap[0].source);
+  }
+  if (harvest.length) return { key: `j:${harvest[0].metier}`, html: `${jobIcon(harvest[0].metier, '•')} ${escapeHtml(harvest[0].metier)}` };
+  if (trap.length) return { key: 'j:Trappeur', html: `${jobIcon('Trappeur')} Trappeur` };
+  if (drops.length) {
+    const fam = monsterByName(drops[0].monstre)?.famille;
+    return fam ? { key: `f:${fam}`, html: `⚔ ${escapeHtml(fam)}` } : monsterGroup(drops[0].monstre);
+  }
+  if (bought && mainRecipe(o)) return { key: 'z:craft', html: '🔨 Fabricables, mis dans les courses', last: 1 };
+  return { key: 'z:market', html: 'Marché / autre (provenance inconnue)', last: 2 };
+}
+/** rows triés -> [{ g, rows }] (un seul groupe sans en-tête en mode « niveau »). */
+function groupRows(rows, acheter) {
+  if (groupMode === 'niveau') return [{ g: null, rows }];
+  const map = new Map();
+  for (const b of rows) {
+    const g = groupOf(b.o, !!acheter[b.id]);
+    if (!map.has(g.key)) map.set(g.key, { g, rows: [] });
+    map.get(g.key).rows.push(b);
+  }
+  const left = x => x.rows.filter(b => b.missing > 0).length;
+  return [...map.values()].sort((a, b) => (a.g.last || 0) - (b.g.last || 0) || (left(b) > 0) - (left(a) > 0)
+    || b.rows.length - a.rows.length || a.g.key.localeCompare(b.g.key));
+}
+const groupCount = rows => { const n = rows.filter(b => b.missing > 0).length; return n ? `${n} à réunir` : 'tout est réuni ✓'; };
+
 function srcHtml(s) {
   if (s.kind === 'recolte') {
-    return `<span class="src recolte" title="${escapeHtml(s.metier)} niveau ${s.niveau}">${jobIcon(s.metier, '•')} ${escapeHtml(s.metier)} ${s.niveau}`
-      + `${s.source ? ` · ${escapeHtml(s.source)}` : ''}${s.taux ? ` (${s.taux} %)` : ''}</span>`;
+    const low = tooLow(s.metier, s.niveau);
+    return `<span class="src recolte${low != null ? ' low' : ''}" title="${escapeHtml(s.metier)} niveau ${s.niveau}${low != null ? ` (tu es niveau ${low})` : ''}">${jobIcon(s.metier, '•')} ${escapeHtml(s.metier)} ${s.niveau}`
+      + `${s.source ? ` · ${escapeHtml(s.source)}` : ''}${s.taux ? ` (${s.taux} %)` : ''}${low != null ? ' 🔒' : ''}</span>`;
   }
   if (s.kind === 'drop') {
     const m = monsterByName(s.monstre);
@@ -177,19 +226,31 @@ export async function renderCraft() {
   const unpriced = toBuy.filter(b => !prix[b.id]).length;
   const left = toBuy.reduce((t, b) => t + (prix[b.id] || 0) * b.missing, 0);
   const jobs = Object.entries(res.jobs).sort((a, b) => b[1] - a[1]);
+  const lowCrafts = res.crafts.filter(x => x.runs > 0 && tooLow(x.recipe.metier, x.recipe.niveau) != null).length;
   $('#craftSummary').innerHTML = `
     <div class="stat"><b>${res.base.length}</b><span>ressources</span></div>
     <div class="stat"><b>${missingCount}</b><span>encore à réunir</span></div>
     <div class="stat"><b>${res.crafts.filter(x => x.runs > 0).length}</b><span>fabrications</span></div>
     <div class="stat" title="Ce qui reste à réunir, au prix saisi dans la colonne Prix"><b>${left ? fmtN(Math.round(left)) : '—'}</b><span>kamas restants${unpriced && toBuy.length ? ` · ${unpriced} sans prix` : ''}</span></div>
-    <div class="jobs">${jobs.map(([j, l]) => `<span class="chip">${jobIcon(j, '')} ${escapeHtml(j)} ${l}</span>`).join('')}</div>`;
+    <div class="jobs">${jobs.map(([j, l]) => {
+      const mine = myJobs()[j];
+      const cls = mine == null ? '' : mine < l ? ' low' : ' ok';
+      return `<button class="chip job${cls}" type="button" data-job="${escapeHtml(j)}" title="${mine == null ? 'Clique pour indiquer ton niveau' : `Ton niveau : ${mine}. Clique pour le changer`}">${jobIcon(j, '')} ${escapeHtml(j)} ${l}${mine != null && mine < l ? ` <span class="mine">· toi ${mine}</span>` : mine != null ? ' ✓' : ''}</button>`;
+    }).join('')}${lowCrafts ? `<span class="jobs-warn">🔒 ${lowCrafts} fabrication${lowCrafts > 1 ? 's' : ''} au-dessus de ton niveau</span>`
+      : !Object.keys(myJobs()).length ? '<span class="jobs-hint">Clique sur un métier pour indiquer ton niveau.</span>' : ''}</div>`;
 
   // ressources
   const hideDone = $('#craftHideDone').checked;
   const rows = res.base
     .map(b => ({ ...b, o: IDX.byId.get(b.id) }))
     .sort((a, b) => (b.missing > 0) - (a.missing > 0) || a.o.niveau - b.o.niveau || a.o._key.localeCompare(b.o._key));
-  $('#craftBase').innerHTML = rows.filter(b => !hideDone || b.missing > 0).map(b => {
+  $('#craftGroup').value = groupMode;
+  const groups = groupRows(rows, c.acheter);
+  $('#craftBase').innerHTML = groups.map(({ g, rows: gr }) => {
+    const shown = gr.filter(b => !hideDone || b.missing > 0);
+    if (!shown.length) return '';
+    return (g ? `<tr class="grp"><th colspan="6"><span class="grp-name">${g.html}</span><span class="grp-count">${groupCount(gr)}</span></th></tr>` : '')
+      + shown.map(b => {
     const bought = !!c.acheter[b.id];
     const srcs = sourcesOf(b.o).filter(s => !(s.kind === 'recette' && !bought));
     const p = prix[b.id] || 0;
@@ -204,6 +265,7 @@ export async function renderCraft() {
       <td class="num price"><input class="have" type="number" min="0" step="1" value="${p || ''}" placeholder="—" data-price aria-label="Prix unitaire en kamas" title="Prix unitaire (HDV) en kamas">${p && b.missing > 0 ? `<div class="sub">${fmtK(p * b.missing)}</div>` : ''}</td>
       <td class="where"><div class="srcs">${srcs.map(srcHtml).join('') || '<span class="muted small">provenance inconnue (marché)</span>'}</div></td>
     </tr>`;
+      }).join('');
   }).join('') || '<tr><td colspan="6" class="empty-small">Tout est réuni 🎉</td></tr>';
 
   renderOverlay();
@@ -220,8 +282,9 @@ export async function renderCraft() {
         ? `<span class="cost cheaper">acheter : ${fmtK(k.buy)}/u, moins cher que fabriquer (${fmtK(k.craft)}/u)</span>`
         : `<span class="cost">fabriquer : ${fmtK(k.craft)}/u, moins cher qu'acheter (${fmtK(k.buy)}/u)</span>`;
     } else if (k.craft != null) cmp = `<span class="cost">fabriquer : ${fmtK(k.craft)}/u</span>`;
-    return `<li class="${x.runs === 0 ? 'done' : ''}" data-id="${x.id}">
-      <span class="job">${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(x.recipe.metier)} ${x.recipe.niveau}</span>
+    const low = x.runs > 0 ? tooLow(x.recipe.metier, x.recipe.niveau) : null;
+    return `<li class="${x.runs === 0 ? 'done' : ''}${low != null ? ' locked' : ''}" data-id="${x.id}">
+      <span class="job"${low != null ? ` title="Tu es ${escapeHtml(x.recipe.metier)} niveau ${low} : il te faut le niveau ${x.recipe.niveau} (ou acheter l'objet)"` : ''}>${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(x.recipe.metier)} ${x.recipe.niveau}${low != null ? ` <span class="lvl-low">🔒 toi ${low}</span>` : ''}</span>
       <span class="what">${x.runs > 0 ? `<b>${fmtN(x.runs)}×</b>` : '<b>✓</b>'} ${itemLabel(o)}${yieldQ > 1 ? ` <span class="muted small">(${yieldQ} par fabrication)</span>` : ''}
         ${x.have ? `<span class="muted small">· ${fmtN(x.have)} déjà en stock</span>` : ''}${cmp}</span>
       <span class="step-actions">
@@ -276,7 +339,12 @@ function bindCraftLists() {
 function bindCraft() {
   bindCraftLists();
   const input = $('#craftSearch');
-  input.addEventListener('input', () => { suggIdx = input.value.trim() ? 0 : -1; renderCraftSuggest(); });
+  input.addEventListener('input', () => {
+    // un lien de partage collé dans la recherche importe la liste
+    if (/#liste=/.test(input.value) && ctx.importShared?.(input.value)) { input.value = ''; renderCraftSuggest(); return; }
+    suggIdx = input.value.trim() ? 0 : -1;
+    renderCraftSuggest();
+  });
   input.addEventListener('focus', () => IDX && renderCraftSuggest());
   input.addEventListener('blur', () => setTimeout(() => { $('#craftSuggest').hidden = true; }, 150));
   input.addEventListener('keydown', e => {
@@ -351,6 +419,29 @@ function bindCraft() {
     ctx.saveCraft(); renderCraft();
   });
   $('#craftHideDone').addEventListener('change', renderCraft);
+  $('#craftGroup').addEventListener('change', e => {
+    groupMode = e.target.value;
+    try { localStorage.setItem(GROUP_KEY, groupMode); } catch { /* rien */ }
+    renderCraft();
+  });
+  $('#craftSummary').addEventListener('click', e => {
+    const chip = e.target.closest('[data-job]');
+    if (!chip) return;
+    const j = chip.dataset.job;
+    const v = prompt(`Ton niveau en ${j} (vide pour ne pas l'indiquer) :`, myJobs()[j] || '');
+    if (v == null) return;
+    ctx.setJob(j, v);
+    renderCraft();
+  });
+  $('#craftShare').addEventListener('click', async () => {
+    const c = ctx.getCraft();
+    if (!c.cibles.length) return;
+    const url = `${ctx.shareBase()}#liste=${encodeShare(ctx.lists.activeName(), c.cibles)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      ctx.toast('Lien de la liste copié : envoie-le, il s\'ouvre sur le site et s\'importe en un clic.', 'ok');
+    } catch { prompt('Lien de partage de la liste :', url); }
+  });
   $('#craftOverlay').addEventListener('click', () => openOverlay());
   $('#craftClear').addEventListener('click', () => {
     const c = ctx.getCraft();
@@ -511,6 +602,8 @@ export async function openItem(id) {
 
 /* ------------------------------------------------------------ init */
 
+export { decodeShare };
+
 export function initCraft(context) {
   ctx = context;
   bindCraft();
@@ -669,7 +762,7 @@ export function renderOverlay() {
       ${ovl.mode === 'pip' ? '' : '<button class="ovl-btn" type="button" data-ovl-close title="Revenir à l\'appli complète">⤢</button>'}
     </header>
     ${targets ? `<p class="ovl-targets" title="${targets}">${targets}</p>` : ''}
-    <ul class="ovl-list">${shown.map(b => {
+    <ul class="ovl-list">${groupRows(shown, c.acheter).map(({ g, rows: gr }) => (g ? `<li class="ovl-group"><span>${g.html.replace(/<\/?button[^>]*>/g, '')}</span><span class="grp-count">${groupCount(gr)}</span></li>` : '') + gr.map(b => {
       const have = c.stock[b.id] || 0;
       const done = b.missing <= 0;
       const srcs = sourcesOf(b.o).filter(s => !(s.kind === 'recette' && !c.acheter[b.id])).slice(0, 2).map(srcShort).filter(Boolean);
@@ -684,7 +777,7 @@ export function renderOverlay() {
         </div>
         <button class="ovl-done" type="button" data-done title="${done ? 'Remettre à zéro' : 'J\'ai tout'}" aria-label="${done ? 'Remettre à zéro' : 'J\'ai tout'}">${done ? '✓' : '○'}</button>
       </li>`;
-    }).join('') || `<li class="ovl-empty">${rows.length ? 'Tout est réuni 🎉' : (ctx.native?.on ? 'Liste vide : dans WAKFU, survole un objet et appuie sur Ctrl+D pour l\'ajouter.' : 'Ajoute des objets dans l\'onglet Craft.')}</li>`}</ul>
+    }).join('')).join('') || `<li class="ovl-empty">${rows.length ? 'Tout est réuni 🎉' : (ctx.native?.on ? 'Liste vide : dans WAKFU, survole un objet et appuie sur Ctrl+D pour l\'ajouter.' : 'Ajoute des objets dans l\'onglet Craft.')}</li>`}</ul>
     ${ctx.native?.on ? `<footer class="ovl-foot"><label>Opacité <input type="range" min="40" max="100" step="5" value="${ovlPrefs.opacity}" data-ovl-opacity></label><span data-ovl-opacity-val>${ovlPrefs.opacity} %</span></footer>` : ''}
   </div>`;
   const list = root.querySelector('.ovl-list');
