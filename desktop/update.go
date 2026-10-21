@@ -19,17 +19,30 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-const (
-	releasesPage   = "https://github.com/Phhanuel/Wak-Forge/releases"
-	downloadPrefix = releasesPage + "/download/"
-	updatedFlag    = "--updated" // passé à la nouvelle version : l'ancienne est en train de se fermer
-)
+const updatedFlag = "--updated" // passé à la nouvelle version : l'ancienne est en train de se fermer
+
+// Pages de releases acceptées : le dépôt actuel et sa future adresse (organisation wakforge).
+var releasesPages = []string{
+	"https://github.com/Phhanuel/Wak-Forge/releases",
+	"https://github.com/wakforge/wakforge.github.io/releases",
+}
+
+// fromReleases dit si url est une page (ou, avec sub, un sous-chemin) des releases du projet.
+func fromReleases(url, sub string) bool {
+	u := strings.ToLower(url)
+	for _, p := range releasesPages {
+		if strings.HasPrefix(u, strings.ToLower(p+sub)) {
+			return true
+		}
+	}
+	return false
+}
 
 var procShellExecuteW = shell32.NewProc("ShellExecuteW")
 
 // openURL ouvre une page GitHub du projet dans le navigateur par défaut.
 func openURL(url string) {
-	if !strings.HasPrefix(strings.ToLower(url), strings.ToLower(releasesPage)) {
+	if !fromReleases(url, "") {
 		return
 	}
 	verb, _ := windows.UTF16PtrFromString("open")
@@ -39,7 +52,7 @@ func openURL(url string) {
 
 // selfUpdate télécharge l'exe de la release puis remplace l'exe actuel. Il ne reste qu'à relancer.
 func selfUpdate(url string) (string, error) {
-	if !strings.HasPrefix(strings.ToLower(url), strings.ToLower(downloadPrefix)) || !strings.HasSuffix(strings.ToLower(url), ".exe") {
+	if !fromReleases(url, "/download/") || !strings.HasSuffix(strings.ToLower(url), ".exe") {
 		return "", errors.New("adresse de téléchargement inattendue")
 	}
 	exe, err := os.Executable()
