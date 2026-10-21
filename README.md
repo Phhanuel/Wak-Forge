@@ -14,6 +14,10 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 
 </details>
 
+> 🇬🇧 **English** – Wak'Forge is also available in English: [wakforge.github.io/?lang=en](https://wakforge.github.io/?lang=en) (or Settings → Langue · Language).
+> Pick the items you want to craft and get **every base resource to gather**, intermediate recipes included, with where to find each one (harvest, trapper, monster drops). Tick them off as you go, in an **overlay** that stays on top of the game. Also: a full **bestiary** with drops, **archmonster timers**, shareable lists, market prices and profession levels.
+> Website (browser, mobile, installable) or standalone **Windows app**: [download `WakForge.exe`](https://github.com/wakforge/wakforge.github.io/releases/latest/download/WakForge.exe) (Windows warns because the exe is not signed: *More info → Run anyway*). Free community fan project, not affiliated with Ankama.
+
 ## Fonctionnalités
 
 ### Craft et bestiaire
@@ -29,6 +33,8 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
   - **Appli PC** : la fenêtre passe en petit format, toujours au premier plan, avec une opacité réglable. Le bouton ⤢ la remet en grand.
   - **Chrome / Edge** : une fenêtre flottante (Picture-in-Picture) qui reste au-dessus des autres applis.
   - **Autres navigateurs** : la page passe en vue compacte.
+  - **Liste affichée** : avec plusieurs listes, un menu en haut de l'overlay permet de changer de liste.
+  - **Mode fabrication** : les onglets **Courses** / **Fabrication** passent de la liste des ressources aux étapes de fabrication, à cocher au fur et à mesure. Dès que la dernière ressource est réunie, l'overlay passe tout seul aux étapes.
 - **Scan d'objet** (appli PC) : dans WAKFU, passe la souris sur un objet pour afficher son infobulle et appuie sur <kbd>Ctrl</kbd>+<kbd>D</kbd> : une petite fenêtre s'ouvre à côté de la souris pour choisir la rareté et la quantité, puis l'objet est ajouté à la liste de craft.
   Avec <kbd>Ctrl</kbd>+<kbd>F</kbd> sur une ressource de ta liste, elle s'ajoute à la colonne « J'ai » (la quantité proposée est ce qu'il manque).
   L'appli fait une capture d'écran autour de la souris et la lit avec la reconnaissance de texte intégrée à Windows. Elle ne lit ni ne modifie le jeu, et rien n'est envoyé sur internet. Les raccourcis n'agissent que quand le jeu est au premier plan, et peuvent être désactivés dans Réglages.
@@ -143,6 +149,8 @@ Pour mettre la table à jour après une mise à jour du jeu, lance `node scripts
 
 Les fichiers sont régénérés **automatiquement chaque lundi** par le workflow « Mise à jour des données du jeu » (onglet Actions), pour suivre les mises à jour du jeu.
 Pour les régénérer à la main : `node scripts/fetch-gamedata.mjs` (Node 18+).
+Si le wiki est injoignable, le script garde le bestiaire et les drops actuels et met quand même à jour le reste (objets, recettes, textes anglais).
+[`web/data/data_en.json`](web/data/data_en.json) contient les textes anglais du jeu pour la version anglaise (types d'objets, effets, familles, zones, lieux de récolte).
 
 ## Développer
 

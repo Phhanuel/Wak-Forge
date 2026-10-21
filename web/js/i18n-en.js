@@ -381,4 +381,10 @@ export const EN = {
   "Volume": "Volume",
   "Wak'Forge – Craft & bestiaire Wakfu": "Wak'Forge – Wakfu craft & bestiary",
   "Wak'Forge : liste de courses de craft, bestiaire et timers d'archimonstres pour Wakfu.": "Wak'Forge: crafting shopping list, bestiary and archmonster timers for Wakfu.",
+  "Liste affichée": "Displayed list",
+  "{n} fabrication à faire": "{n} craft to do",
+  "{n} fabrications à faire": "{n} crafts to do",
+  "tout est fabriqué 🎉": "everything is crafted 🎉",
+  "Courses": "Shopping",
+  "Fabrication": "Crafting",
 };

@@ -658,7 +658,8 @@ export function gamedataInfo() {
 
 const OVL_KEY = 'wakforge.overlay.v1';
 let ovl = { mode: null, root: null, win: null };
-let ovlPrefs = { hideDone: false, opacity: 100 };
+let ovlPrefs = { hideDone: false, opacity: 100, view: 'courses' }; // view : courses | fab (étapes de fabrication)
+let ovlLeft = null; // ressources restantes au dernier rendu : passage automatique aux étapes quand tout est réuni
 try { Object.assign(ovlPrefs, JSON.parse(localStorage.getItem(OVL_KEY) || localStorage.getItem('wakup.overlay.v1') || '{}')); } catch { /* rien */ }
 const saveOvlPrefs = () => { try { localStorage.setItem(OVL_KEY, JSON.stringify(ovlPrefs)); } catch { /* rien */ } };
 
@@ -747,6 +748,7 @@ function bindOverlay(root) {
     if (!b) return;
     if (b.matches('[data-ovl-close]')) { closeOverlay(); return; }
     if (b.matches('[data-ovl-hide]')) { ovlPrefs.hideDone = !ovlPrefs.hideDone; saveOvlPrefs(); renderOverlay(); return; }
+    if (b.matches('[data-ovl-view]')) { ovlPrefs.view = b.dataset.ovlView; saveOvlPrefs(); renderOverlay(); return; }
     const li = b.closest('[data-id]');
     if (!li) return;
     const id = +li.dataset.id;
@@ -756,6 +758,12 @@ function bindOverlay(root) {
     if (b.matches('[data-inc]')) setStock(id, have + step);
     else if (b.matches('[data-dec]')) setStock(id, have - step);
     else if (b.matches('[data-done]')) setStock(id, have >= need ? 0 : need);
+  });
+  // liste affichée : même choix que les onglets de l'appli
+  root.addEventListener('change', e => {
+    if (!e.target.matches('[data-ovl-list]')) return;
+    ovlLeft = null;
+    if (ctx.lists.switch(e.target.value)) renderCraft();
   });
   root.addEventListener('input', e => {
     if (!e.target.matches('[data-ovl-opacity]')) return;
@@ -776,32 +784,65 @@ export function renderOverlay() {
     .map(b => ({ ...b, o: IDX.byId.get(b.id) }))
     .sort((a, b) => (b.missing > 0) - (a.missing > 0) || a.o.niveau - b.o.niveau || a.o._key.localeCompare(b.o._key));
   const left = rows.filter(b => b.missing > 0).length;
+  const crafts = res.crafts.filter(x => x.runs > 0 || x.have > 0);
+  const craftsLeft = res.crafts.filter(x => x.runs > 0).length;
+  // dès que la dernière ressource est réunie, on passe aux étapes de fabrication
+  if (ovlLeft > 0 && left === 0 && craftsLeft) { ovlPrefs.view = 'fab'; saveOvlPrefs(); }
+  ovlLeft = left;
+  const fab = ovlPrefs.view === 'fab' && crafts.length > 0;
   const shown = rows.filter(b => !ovlPrefs.hideDone || b.missing > 0);
   const targets = c.cibles.map(tg => `${fmtN(tg.qte)}× ${escapeHtml(IDX.byId.get(tg.id).nom)}`).join(' · ');
   const scrollTop = root.querySelector('.ovl-list')?.scrollTop || 0;
-  root.innerHTML = `<div class="ovl">
-    <header class="ovl-head">
-      <div class="ovl-title"><b>${ctx.lists.all().length > 1 ? escapeHtml(ctx.lists.activeName()) : t('Liste de courses')}</b><span>${rows.length ? (left ? t('{a} sur {b} à réunir', { a: left, b: rows.length }) : t('tout est réuni 🎉')) : t('vide')}</span></div>
-      <button class="ovl-btn ${ovlPrefs.hideDone ? 'on' : ''}" type="button" data-ovl-hide title="${ovlPrefs.hideDone ? t('Afficher ce que j\'ai déjà') : t('Masquer ce que j\'ai déjà')}" aria-pressed="${ovlPrefs.hideDone}">✓</button>
-      ${ovl.mode === 'pip' ? '' : `<button class="ovl-btn" type="button" data-ovl-close title="${t('Revenir à l\'appli complète')}">⤢</button>`}
-    </header>
-    ${targets ? `<p class="ovl-targets" title="${targets}">${targets}</p>` : ''}
-    <ul class="ovl-list">${groupRows(shown, c.acheter).map(({ g, rows: gr }) => (g ? `<li class="ovl-group"><span>${g.html.replace(/<\/?button[^>]*>/g, '')}</span><span class="grp-count">${groupCount(gr)}</span></li>` : '') + gr.map(b => {
-      const have = c.stock[b.id] || 0;
-      const done = b.missing <= 0;
-      const srcs = sourcesOf(b.o).filter(s => !(s.kind === 'recette' && !c.acheter[b.id])).slice(0, 2).map(srcShort).filter(Boolean);
-      return `<li class="${done ? 'done' : ''}" data-id="${b.id}" data-need="${b.need}">
+  const lists = ctx.lists.all();
+  const title = lists.length > 1
+    ? `<select class="ovl-select" data-ovl-list aria-label="${t('Liste affichée')}" title="${t('Liste affichée')}">${lists.map(l => `<option value="${escapeHtml(l.id)}"${l.active ? ' selected' : ''}>${escapeHtml(l.nom)} (${l.count})</option>`).join('')}</select>`
+    : `<b>${t('Liste de courses')}</b>`;
+  const status = fab
+    ? (craftsLeft ? tn(craftsLeft, '{n} fabrication à faire', '{n} fabrications à faire') : t('tout est fabriqué 🎉'))
+    : rows.length ? (left ? t('{a} sur {b} à réunir', { a: left, b: rows.length }) : t('tout est réuni 🎉')) : t('vide');
+  const qty = (have, need) => `<span class="ovl-count"><b>${fmtN(Math.min(have, need))}</b>/${fmtN(need)}</span>`;
+  const doneBtn = done => `<button class="ovl-done" type="button" data-done title="${done ? t('Remettre à zéro') : t('J\'ai tout')}" aria-label="${done ? t('Remettre à zéro') : t('J\'ai tout')}">${done ? '✓' : '○'}</button>`;
+  const courses = groupRows(shown, c.acheter).map(({ g, rows: gr }) => (g ? `<li class="ovl-group"><span>${g.html.replace(/<\/?button[^>]*>/g, '')}</span><span class="grp-count">${groupCount(gr)}</span></li>` : '') + gr.map(b => {
+    const have = c.stock[b.id] || 0;
+    const done = b.missing <= 0;
+    const srcs = sourcesOf(b.o).filter(s => !(s.kind === 'recette' && !c.acheter[b.id])).slice(0, 2).map(srcShort).filter(Boolean);
+    return `<li class="${done ? 'done' : ''}" data-id="${b.id}" data-need="${b.need}">
         ${itemIcon(b.o, { size: 42 })}
         <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(b.o.nom)}">${escapeHtml(b.o.nom)}</div>
           <div class="ovl-src">${srcs.join(' · ') || t('marché')}</div></div>
         <div class="ovl-qty">
           <button type="button" data-dec title="${t('−1 (Maj : −10)')}" aria-label="${t('Moins')}">−</button>
-          <span class="ovl-count"><b>${fmtN(Math.min(have, b.need))}</b>/${fmtN(b.need)}</span>
+          ${qty(have, b.need)}
           <button type="button" data-inc title="${t('+1 (Maj : +10)')}" aria-label="${t('Plus')}">+</button>
         </div>
-        <button class="ovl-done" type="button" data-done title="${done ? t('Remettre à zéro') : t('J\'ai tout')}" aria-label="${done ? t('Remettre à zéro') : t('J\'ai tout')}">${done ? '✓' : '○'}</button>
+        ${doneBtn(done)}
       </li>`;
-    }).join('')).join('') || `<li class="ovl-empty">${rows.length ? t('Tout est réuni 🎉') : (ctx.native?.on ? t('Liste vide : dans WAKFU, survole un objet et appuie sur Ctrl+D pour l\'ajouter.') : t('Ajoute des objets dans l\'onglet Craft.'))}</li>`}</ul>
+  }).join('')).join('') || `<li class="ovl-empty">${rows.length ? t('Tout est réuni 🎉') : (ctx.native?.on ? t('Liste vide : dans WAKFU, survole un objet et appuie sur Ctrl+D pour l\'ajouter.') : t('Ajoute des objets dans l\'onglet Craft.'))}</li>`;
+  // étapes : cocher une fabrication la met « en stock » (ses ingrédients ne sont alors plus comptés)
+  const steps = crafts.filter(x => !ovlPrefs.hideDone || x.runs > 0).map(x => {
+    const o = IDX.byId.get(x.id);
+    const done = x.runs === 0;
+    const low = done ? null : tooLow(x.recipe.metier, x.recipe.niveau);
+    return `<li class="${done ? 'done' : ''}${low != null ? ' locked' : ''}" data-id="${x.id}" data-need="${x.need}">
+        ${itemIcon(o, { size: 42 })}
+        <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(o.nom)}">${done ? '' : `<b>${fmtN(x.runs)}×</b> `}${escapeHtml(o.nom)}</div>
+          <div class="ovl-src">${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(jobName(x.recipe.metier))} ${x.recipe.niveau}${low != null ? ` · 🔒 ${t('toi {n}', { n: low })}` : ''}</div></div>
+        ${qty(c.stock[x.id] || 0, x.need)}
+        ${doneBtn(done)}
+      </li>`;
+  }).join('') || `<li class="ovl-empty">${t('tout est fabriqué 🎉')}</li>`;
+  root.innerHTML = `<div class="ovl">
+    <header class="ovl-head">
+      <div class="ovl-title">${title}<span>${status}</span></div>
+      <button class="ovl-btn ${ovlPrefs.hideDone ? 'on' : ''}" type="button" data-ovl-hide title="${ovlPrefs.hideDone ? t('Afficher ce que j\'ai déjà') : t('Masquer ce que j\'ai déjà')}" aria-pressed="${ovlPrefs.hideDone}">✓</button>
+      ${ovl.mode === 'pip' ? '' : `<button class="ovl-btn" type="button" data-ovl-close title="${t('Revenir à l\'appli complète')}">⤢</button>`}
+    </header>
+    ${crafts.length ? `<div class="ovl-tabs" role="tablist">
+      <button type="button" role="tab" data-ovl-view="courses" aria-selected="${!fab}">${t('Courses')}${left ? ` <span class="list-count">${left}</span>` : ' ✓'}</button>
+      <button type="button" role="tab" data-ovl-view="fab" aria-selected="${fab}">${t('Fabrication')}${craftsLeft ? ` <span class="list-count">${craftsLeft}</span>` : ' ✓'}</button>
+    </div>` : ''}
+    ${targets ? `<p class="ovl-targets" title="${targets}">${targets}</p>` : ''}
+    <ul class="ovl-list">${fab ? steps : courses}</ul>
     ${ctx.native?.on ? `<footer class="ovl-foot"><label>${t('Opacité')} <input type="range" min="40" max="100" step="5" value="${ovlPrefs.opacity}" data-ovl-opacity></label><span data-ovl-opacity-val>${ovlPrefs.opacity} %</span></footer>` : ''}
   </div>`;
   const list = root.querySelector('.ovl-list');

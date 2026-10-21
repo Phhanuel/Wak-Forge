@@ -21,7 +21,14 @@ function serialize(obj, listKey) {
 const nomsPath = new URL('./gamedata/noms_fr.json', import.meta.url);
 const nomsFr = existsSync(nomsPath) ? JSON.parse(readFileSync(nomsPath, 'utf8')) : null;
 if (!nomsFr) console.log('· pas de scripts/gamedata/noms_fr.json : monstres et zones en anglais (voir i18n-from-game.mjs)');
-const result = await buildGamedata({ log: m => console.log('·', m), nomsFr });
+// données actuelles : servent de secours si le wiki est en panne
+const read = name => (existsSync(out(name)) ? JSON.parse(readFileSync(out(name), 'utf8')) : null);
+const prevBest = read('data_bestiaire');
+const previous = prevBest && {
+  items: [...(read('data_item')?.items || []), ...(read('data_ressource')?.ressources || [])],
+  monstres: prevBest.monstres, remarque: prevBest.remarque, en: read('data_en'),
+};
+const result = await buildGamedata({ log: m => console.log('·', m), nomsFr, previous });
 
 // Garde-fou : ne pas écraser de bonnes données par un résultat manifestement incomplet.
 const prev = existsSync(out('data_item')) ? JSON.parse(readFileSync(out('data_item'), 'utf8')) : null;
