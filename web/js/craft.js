@@ -147,6 +147,7 @@ function addTarget(o, qte = 1) {
 
 export async function renderCraft() {
   if (!(await ensureData('view-craft'))) return;
+  renderCraftLists();
   const c = ctx.getCraft();
   c.cibles = c.cibles.filter(t => IDX.byId.has(t.id));
   const res = computeList(IDX, c.cibles, { stock: c.stock, buy: c.acheter });
@@ -212,7 +213,48 @@ export async function renderCraft() {
   }).join('');
 }
 
+/** Onglets des listes de craft (une liste par projet : « Panoplie 200 », « Reroll »…). */
+function renderCraftLists() {
+  const L = ctx.lists;
+  const all = L.all();
+  $('#craftLists').innerHTML = all.map(l => `<span class="list-tab${l.active ? ' active' : ''}">
+      <button type="button" role="tab" data-list="${escapeHtml(l.id)}" aria-selected="${l.active}" title="${l.active ? 'Double-clic pour renommer' : 'Ouvrir cette liste'}">${escapeHtml(l.nom)}<span class="list-count">${l.count}</span></button>
+      ${l.active ? `<button class="list-act" type="button" data-list-rename title="Renommer" aria-label="Renommer la liste">✎</button>
+      ${all.length > 1 ? '<button class="list-act" type="button" data-list-delete title="Supprimer cette liste" aria-label="Supprimer la liste">×</button>' : ''}` : ''}
+    </span>`).join('')
+    + (all.length < L.max ? '<button class="btn small ghost list-new" type="button" data-list-new title="Créer une autre liste de craft">+ Nouvelle liste</button>' : '');
+}
+
+function bindCraftLists() {
+  const L = ctx.lists;
+  const activeId = () => L.all().find(l => l.active)?.id;
+  const rename = () => {
+    const nom = prompt('Nom de la liste :', L.activeName());
+    if (nom != null && L.rename(activeId(), nom)) renderCraft();
+  };
+  const box = $('#craftLists');
+  box.addEventListener('click', e => {
+    const tab = e.target.closest('[data-list]');
+    if (tab) { if (L.switch(tab.dataset.list)) renderCraft(); return; }
+    if (e.target.closest('[data-list-rename]')) { rename(); return; }
+    if (e.target.closest('[data-list-new]')) {
+      const nom = prompt('Nom de la nouvelle liste :', `Liste ${L.all().length + 1}`);
+      if (nom != null && L.create(nom)) { renderCraft(); $('#craftSearch').focus(); }
+      return;
+    }
+    if (e.target.closest('[data-list-delete]')) {
+      const nom = L.activeName();
+      const undo = L.remove(activeId());
+      if (!undo) return;
+      renderCraft();
+      ctx.toastUndo(`Liste <b>${escapeHtml(nom)}</b> supprimée.`, () => { undo(); renderCraft(); });
+    }
+  });
+  box.addEventListener('dblclick', e => { if (e.target.closest('[data-list][aria-selected="true"]')) rename(); });
+}
+
 function bindCraft() {
+  bindCraftLists();
   const input = $('#craftSearch');
   input.addEventListener('input', () => { suggIdx = input.value.trim() ? 0 : -1; renderCraftSuggest(); });
   input.addEventListener('focus', () => IDX && renderCraftSuggest());
@@ -286,12 +328,12 @@ function bindCraft() {
     const saved = JSON.parse(JSON.stringify(c));
     c.cibles = []; c.stock = {}; c.acheter = {};
     ctx.saveCraft(); renderCraft();
-    ctx.toastUndo('Liste vidée.', () => { Object.assign(ctx.getCraft(), saved); ctx.saveCraft(); renderCraft(); });
+    ctx.toastUndo('Liste vidée.', () => { Object.assign(c, saved); ctx.saveCraft(); renderCraft(); });
   });
   $('#craftCopy').addEventListener('click', async () => {
     const c = ctx.getCraft();
     const res = computeList(IDX, c.cibles, { stock: c.stock, buy: c.acheter });
-    const lines = ['Objectifs :', ...c.cibles.map(t => `- ${t.qte} × ${IDX.byId.get(t.id).nom}`), '', 'À réunir :'];
+    const lines = [...(ctx.lists.all().length > 1 ? [`Liste : ${ctx.lists.activeName()}`, ''] : []), 'Objectifs :', ...c.cibles.map(t => `- ${t.qte} × ${IDX.byId.get(t.id).nom}`), '', 'À réunir :'];
     for (const b of res.base.filter(x => x.missing > 0)) lines.push(`- ${b.missing} × ${IDX.byId.get(b.id).nom}`);
     lines.push('', 'Fabrications :');
     for (const x of res.crafts.filter(y => y.runs > 0)) lines.push(`- ${x.runs} × ${IDX.byId.get(x.id).nom} (${x.recipe.metier} ${x.recipe.niveau})`);
@@ -585,7 +627,7 @@ export function renderOverlay() {
   const scrollTop = root.querySelector('.ovl-list')?.scrollTop || 0;
   root.innerHTML = `<div class="ovl">
     <header class="ovl-head">
-      <div class="ovl-title"><b>Liste de courses</b><span>${rows.length ? (left ? `${left} sur ${rows.length} à réunir` : 'tout est réuni 🎉') : 'vide'}</span></div>
+      <div class="ovl-title"><b>${ctx.lists.all().length > 1 ? escapeHtml(ctx.lists.activeName()) : 'Liste de courses'}</b><span>${rows.length ? (left ? `${left} sur ${rows.length} à réunir` : 'tout est réuni 🎉') : 'vide'}</span></div>
       <button class="ovl-btn ${ovlPrefs.hideDone ? 'on' : ''}" type="button" data-ovl-hide title="${ovlPrefs.hideDone ? 'Afficher' : 'Masquer'} ce que j'ai déjà" aria-pressed="${ovlPrefs.hideDone}">✓</button>
       ${ovl.mode === 'pip' ? '' : '<button class="ovl-btn" type="button" data-ovl-close title="Revenir à l\'appli complète">⤢</button>'}
     </header>

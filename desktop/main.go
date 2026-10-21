@@ -408,17 +408,39 @@ func focusExisting() {
 }
 
 func main() {
+	// après une mise à jour, l'ancienne version met quelques instants à se fermer : on l'attend
+	tries := 1
+	if justUpdated() {
+		tries = 50
+		go cleanupOld()
+	}
 	name, _ := windows.UTF16PtrFromString("WakForgeWakfu.Instance")
-	mutex, err := windows.CreateMutex(nil, false, name)
-	if err == windows.ERROR_ALREADY_EXISTS {
-		focusExisting()
-		return
+	var mutex windows.Handle
+	for i := 0; ; i++ {
+		m, err := windows.CreateMutex(nil, false, name)
+		if err != windows.ERROR_ALREADY_EXISTS {
+			mutex = m
+			break
+		}
+		if m != 0 {
+			windows.CloseHandle(m)
+		}
+		if i+1 >= tries {
+			focusExisting()
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 	if mutex != 0 {
 		defer windows.CloseHandle(mutex)
 	}
 
-	if err := startServer(); err != nil {
+	err := startServer()
+	for i := 1; err != nil && i < tries; i++ {
+		time.Sleep(200 * time.Millisecond)
+		err = startServer()
+	}
+	if err != nil {
 		messageBox(fmt.Sprintf("Impossible de démarrer : le port %d est déjà utilisé.\n\n%v", port, err),
 			"Wak'Forge", 0x10)
 		return
@@ -472,6 +494,27 @@ func main() {
 		w.Dispatch(func() { tr.balloon(title, body) })
 	})
 	_ = w.Bind("nativeVersion", func() string { return version })
+	_ = w.Bind("nativeOpenURL", func(url string) { openURL(url) })
+	// mise à jour : téléchargement + remplacement de l'exe (en arrière-plan, la fenêtre reste
+	// utilisable), puis relance de la nouvelle version ; un échec est renvoyé à la page
+	_ = w.Bind("nativeUpdate", func(url string) {
+		go func() {
+			exe, err := selfUpdate(url)
+			if err == nil {
+				if err = relaunch(exe); err != nil {
+					err = fmt.Errorf("nouvelle version installée, mais le redémarrage a échoué : relance Wak'Forge (%v)", err)
+				}
+			}
+			w.Dispatch(func() {
+				if err != nil {
+					msg, _ := json.Marshal(err.Error())
+					w.Eval("window.wfUpdateFailed && window.wfUpdateFailed(" + string(msg) + ")")
+					return
+				}
+				w.Terminate()
+			})
+		}()
+	})
 
 	// scan d'objet (Ctrl+D dans le jeu) : résultat transmis à la page, et petite fenêtre séparée
 	// ouverte à côté de la souris pour choisir la rareté et la quantité (la fenêtre principale ne bouge pas)

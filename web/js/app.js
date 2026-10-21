@@ -7,7 +7,7 @@ import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.12.1';
+const APP_VERSION = '2.13.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -22,6 +22,7 @@ const native = {
   overlay: (on, alpha) => window.nativeOverlay?.(on, alpha)?.catch?.(() => {}),
   scanEnable: on => window.nativeScanEnable?.(on)?.catch?.(() => {}),
   scanShow: state => window.nativeScanShow?.(state)?.catch?.(() => {}),
+  openURL: url => window.nativeOpenURL?.(url)?.catch?.(() => {}),
   scanStatus: () => (window.nativeScanStatus ? window.nativeScanStatus().catch(() => null) : Promise.resolve(null)),
 };
 
@@ -45,16 +46,40 @@ function sanitizeCraft(raw) {
   return c;
 }
 const craftEmpty = c => !c.cibles.length && !Object.keys(c.stock).length;
+const MAX_LISTES = 20;
+const newListId = () => 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-const defaultState = () => ({
-  version: 1,
-  custom: {},     // id -> { name, min, max, family, zone, level }   archimonstres ajoutés
-  overrides: {},  // id -> { min, max }                               durées perso pour ceux du fichier
-  timers: {},     // id -> { name, start, min, max }                  ms / secondes
-  craft: defaultCraft(),  // liste de courses d'artisanat
-  settings: defaultSettings(),
-  updatedAt: 0,
-});
+function defaultState() {
+  const craft = defaultCraft();
+  return {
+    version: 1,
+    custom: {},     // id -> { name, min, max, family, zone, level }   archimonstres ajoutés
+    overrides: {},  // id -> { min, max }                               durées perso pour ceux du fichier
+    timers: {},     // id -> { name, start, min, max }                  ms / secondes
+    craft,          // liste de craft active (même objet que son entrée dans « listes »)
+    listes: [{ id: 'l1', nom: 'Ma liste', craft }],  // toutes les listes de craft
+    listeActive: 'l1',
+    settings: defaultSettings(),
+    updatedAt: 0,
+  };
+}
+
+/** Listes de craft : « craft » reste la liste active (les anciennes versions ne connaissent qu'elle). */
+function sanitizeListes(s, raw) {
+  s.listes = [];
+  const seen = new Set();
+  for (const l of Array.isArray(raw.listes) ? raw.listes : []) {
+    const id = String(l?.id || '').slice(0, 40);
+    if (!id || seen.has(id) || s.listes.length >= MAX_LISTES) continue;
+    seen.add(id);
+    s.listes.push({ id, nom: cleanName(String(l.nom || '')).slice(0, 40) || 'Liste', craft: sanitizeCraft(l.craft) });
+  }
+  let act = s.listes.find(l => l.id === raw.listeActive) || s.listes[0];
+  if (!act) { act = { id: 'l1', nom: 'Ma liste', craft: null }; s.listes.push(act); }
+  if (raw.craft || !act.craft) act.craft = sanitizeCraft(raw.craft);
+  s.craft = act.craft;
+  s.listeActive = act.id;
+}
 
 function sanitizeState(raw) {
   const s = defaultState();
@@ -78,7 +103,7 @@ function sanitizeState(raw) {
       s.timers[id] = { name: cleanName(t.name), start: +t.start, min, max: dur(t.max) };
     }
   }
-  s.craft = sanitizeCraft(raw.craft);
+  sanitizeListes(s, raw);
   const st = raw.settings || {};
   s.settings = {
     sound: st.sound !== false,
@@ -942,16 +967,74 @@ function mergeInto(other) {
   for (const [id, t] of Object.entries(other.timers)) {
     if (!state.timers[id] || t.start > state.timers[id].start) state.timers[id] = t;
   }
-  if (!craftEmpty(other.craft)) state.craft = other.craft;
+  if (!craftEmpty(other.craft)) setActiveCraft(other.craft);
+  addMissingLists(other);
+}
+
+/** Remplace le contenu de la liste active. */
+function setActiveCraft(craft) {
+  state.craft = craft;
+  const act = state.listes.find(l => l.id === state.listeActive);
+  if (act) act.craft = craft;
+}
+/* Gestion des listes de craft (onglet Craft). */
+const craftLists = {
+  all: () => state.listes.map(l => ({ id: l.id, nom: l.nom, count: l.craft.cibles.length, active: l.id === state.listeActive })),
+  activeName: () => state.listes.find(l => l.id === state.listeActive)?.nom || '',
+  max: MAX_LISTES,
+  switch(id) {
+    const l = state.listes.find(x => x.id === id);
+    if (!l || l.id === state.listeActive) return false;
+    state.listeActive = l.id; state.craft = l.craft;
+    persist();
+    return true;
+  },
+  create(nom) {
+    if (state.listes.length >= MAX_LISTES) return false;
+    const l = { id: newListId(), nom: cleanName(nom).slice(0, 40) || 'Nouvelle liste', craft: defaultCraft() };
+    state.listes.push(l);
+    state.listeActive = l.id; state.craft = l.craft;
+    persist();
+    return true;
+  },
+  rename(id, nom) {
+    const l = state.listes.find(x => x.id === id);
+    nom = cleanName(nom || '').slice(0, 40);
+    if (!l || !nom) return false;
+    l.nom = nom;
+    persist();
+    return true;
+  },
+  /** Supprime une liste (jamais la dernière) ; renvoie de quoi annuler. */
+  remove(id) {
+    const i = state.listes.findIndex(x => x.id === id);
+    if (i < 0 || state.listes.length < 2) return null;
+    const [l] = state.listes.splice(i, 1);
+    const wasActive = l.id === state.listeActive;
+    if (wasActive) { const n = state.listes[Math.min(i, state.listes.length - 1)]; state.listeActive = n.id; state.craft = n.craft; }
+    persist();
+    return () => {
+      if (state.listes.some(x => x.id === l.id) || state.listes.length >= MAX_LISTES) return;
+      state.listes.splice(Math.min(i, state.listes.length), 0, l);
+      if (wasActive) { state.listeActive = l.id; state.craft = l.craft; }
+      persist();
+    };
+  },
+};
+/** Ajoute les listes non vides de « other » qu'on n'a pas encore (fusion, import). */
+function addMissingLists(other) {
+  for (const l of other.listes) {
+    if (l.id === other.listeActive || state.listes.length >= MAX_LISTES || craftEmpty(l.craft)) continue;
+    if (!state.listes.some(x => x.id === l.id)) state.listes.push(l);
+  }
 }
 
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm('Effacer tous tes timers, durées perso et archimonstres ajoutés ?' + (sync.user ? '\nCela s\'applique aussi à ton compte.' : ''))) return;
   const settings = state.settings;
-  const craft = state.craft;
+  const { craft, listes, listeActive } = state;
   state = defaultState();
-  state.settings = settings;
-  state.craft = craft;
+  Object.assign(state, { settings, craft, listes, listeActive });
   refreshCatalog(); persist(); persistDevice();
   renderTimers(true); renderBestiary();
   toast('Tout a été effacé.');
@@ -1065,7 +1148,8 @@ function applyRemote(remote, merge) {
     for (const [id, t] of Object.entries(local.timers)) {
       if (!state.timers[id] || t.start > state.timers[id].start) state.timers[id] = t;
     }
-    if (craftEmpty(state.craft) && !craftEmpty(local.craft)) state.craft = local.craft;
+    if (craftEmpty(state.craft) && !craftEmpty(local.craft)) setActiveCraft(local.craft);
+    addMissingLists(local);
     state.updatedAt = Date.now();
     markPastAsNotified();
     refreshCatalog();
@@ -1099,6 +1183,64 @@ function toastUndo(html, undo) {
   el.querySelector('button').addEventListener('click', () => { undo(); el.remove(); });
 }
 
+/* =================================================================== mise à jour (appli PC) */
+
+// L'appli PC vérifie la dernière release GitHub ; « Mettre à jour » télécharge le nouvel exe,
+// le met à la place de l'ancien et relance l'appli.
+const RELEASES_API = 'https://api.github.com/repos/Phhanuel/Wak-Forge/releases/latest';
+const RELEASES_PAGE = 'https://github.com/Phhanuel/Wak-Forge/releases/latest';
+const verParts = v => String(v || '').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+function isNewer(a, b) {
+  const x = verParts(a), y = verParts(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+}
+let update = null; // { tag, url, page }
+let updateHidden = false; // « Plus tard » : plus de bandeau jusqu'au prochain lancement
+
+async function checkUpdate() {
+  if (!native.on || updateHidden || update?.busy) return;
+  let current = APP_VERSION;
+  try { const v = await window.nativeVersion?.(); if (/^v?\d+\.\d+/.test(v || '')) current = v; } catch { /* rien */ }
+  let rel;
+  try {
+    const r = await fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+    if (!r.ok) return;
+    rel = await r.json();
+  } catch { return; } // hors ligne : on réessaiera plus tard
+  const tag = rel?.tag_name;
+  if (!tag || rel.draft || rel.prerelease || !isNewer(tag, current)) return;
+  const asset = (rel.assets || []).find(x => /\.exe$/i.test(x.name || ''));
+  update = { tag, url: asset?.browser_download_url || '', page: rel.html_url || RELEASES_PAGE };
+  $('#updateText').innerHTML = `<b>Wak'Forge ${escapeHtml(tag)}</b> est disponible (tu as la ${escapeHtml(current.replace(/^v?/, 'v'))}).`;
+  $('#updateGo').textContent = update.url ? 'Mettre à jour' : 'Voir la nouvelle version';
+  $('#updateGo').disabled = false;
+  $('#updateLater').hidden = false;
+  $('#updateBar').hidden = false;
+}
+
+$('#updateGo').addEventListener('click', () => {
+  if (!update) return;
+  if (!update.url || update.failed || !window.nativeUpdate) { native.openURL(update.page); return; }
+  update.busy = true;
+  $('#updateGo').disabled = true;
+  $('#updateGo').textContent = 'Téléchargement…';
+  $('#updateLater').hidden = true;
+  $('#updateText').innerHTML = `Téléchargement de <b>Wak'Forge ${escapeHtml(update.tag)}</b>… L'appli va redémarrer toute seule.`;
+  window.nativeUpdate(update.url).catch(e => window.wfUpdateFailed(String(e?.message || e)));
+});
+$('#updateLater').addEventListener('click', () => { updateHidden = true; $('#updateBar').hidden = true; });
+// appelé par l'appli PC si la mise à jour automatique échoue : on propose le téléchargement manuel
+window.wfUpdateFailed = msg => {
+  if (!update) return;
+  update.busy = false;
+  update.failed = true;
+  $('#updateText').innerHTML = `Mise à jour impossible : ${escapeHtml(msg)}. Tu peux télécharger <b>WakForge.exe</b> à la main.`;
+  $('#updateGo').textContent = 'Ouvrir la page de téléchargement';
+  $('#updateGo').disabled = false;
+  $('#updateLater').hidden = false;
+};
+
 /* =================================================================== démarrage */
 
 function renderGameSource() {
@@ -1111,6 +1253,7 @@ function renderGameSource() {
 async function main() {
   initCraft({
     getCraft: () => state.craft,
+    lists: craftLists,
     archiInfo,
     native,
     archiLaunch: launchArchi,
@@ -1135,6 +1278,8 @@ async function main() {
     native.topmost(device.topmost);
     native.scanEnable(device.scan);
     scheduleNative();
+    setTimeout(checkUpdate, 4000);
+    setInterval(checkUpdate, 6 * 3600 * 1000);
   }
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === '127.0.0.1' || location.hostname === 'localhost')) {

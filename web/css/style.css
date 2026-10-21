@@ -163,6 +163,36 @@ main { max-width: 1180px; margin: 0 auto; padding: 26px 16px 80px; }
 
 .summary { color: var(--text-3); margin: 18px 2px 6px; min-height: 1.4em; }
 
+/* ---------------- listes de craft */
+.craft-lists { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.list-tab {
+  display: inline-flex; align-items: center; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.list-tab.active { background: var(--accent-soft); border-color: var(--accent); }
+.list-tab button { border: 0; background: transparent; color: var(--text-2); cursor: pointer; font: inherit; }
+.list-tab [data-list] { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; font-weight: 600; border-radius: 999px; }
+.list-tab.active [data-list] { color: var(--text); padding-right: 4px; }
+.list-tab [data-list]:hover { color: var(--text); }
+.list-count {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: 12px;
+  background: var(--bg-2); color: var(--text-3); display: inline-grid; place-items: center;
+}
+.list-act { padding: 4px 8px; font-size: 14px; border-radius: 999px; }
+.list-act:hover { color: var(--text); background: var(--surface-2); }
+.list-act:last-child { margin-right: 3px; }
+.list-tab button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------------- nouvelle version (appli PC) */
+.update-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 18px; padding: 10px 16px;
+  background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius-sm);
+}
+.update-bar[hidden] { display: none; }
+.update-bar .update-text { flex: 1; min-width: 200px; }
+
+
 /* ---------------- cartes */
 .group h2 {
   font-size: 13px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--text-3);
