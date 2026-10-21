@@ -122,6 +122,27 @@
 
   /* ---------------------------------------------------------- noms français */
 
+  // Complète les familles et zones anglaises de data_en.json avec la table anglais -> français lue
+  // à l'envers (utile quand le wiki est injoignable : le bestiaire repris est déjà en français).
+  const SMALL = new Set(['of', 'the', 'and', 'in', 'on', 'at', 'to', 'a', 'an', 'for']);
+  const titleCase = s => s.replace(/[a-z][^\s-]*/g, (w, i) => (i && SMALL.has(w) ? w : w[0].toUpperCase() + w.slice(1)));
+  function englishFromTable(res, noms) {
+    const invert = table => {
+      const r = new Map();
+      for (const [en, fr] of Object.entries(table || {})) if (!r.has(fr)) r.set(fr, titleCase(en));
+      return r;
+    };
+    const fam = invert(noms.familles), zon = invert(noms.zones);
+    const add = (out, inv, fr) => {
+      const en = inv.get(fr);
+      if (fr && en && !out[fr] && norm(en) !== norm(fr)) out[fr] = en;
+    };
+    for (const m of res.data_bestiaire.monstres) {
+      add(res.data_en.familles, fam, m.famille);
+      for (const z of m.zones || []) add(res.data_en.zones, zon, z);
+    }
+  }
+
   // Applique la table anglais -> français (scripts/gamedata/noms_fr.json, tirée des fichiers du jeu)
   // aux monstres, familles, zones et objets venant du wiki. Sans table, rien ne change.
   function applyFrenchNames(res, noms) {
@@ -465,10 +486,11 @@
       const t = applyFrenchNames(out, nomsFr);
       log(`noms français : ${t.monstres}/${t.total} monstres`);
     }
+    if (nomsFr) englishFromTable(out, nomsFr);
     return out;
   }
 
-  const api = { buildGamedata, applyFrenchNames, renderTemplate, effValue, RARETES };
+  const api = { buildGamedata, applyFrenchNames, englishFromTable, renderTemplate, effValue, RARETES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.WakfuGamedata = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
