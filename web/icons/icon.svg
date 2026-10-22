@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><circle cx="256" cy="256" r="250" fill="#171e2e"/><circle cx="256" cy="256" r="198" fill="#f4b234"/><circle cx="256" cy="256" r="166" fill="#fdf6e8"/><g transform="translate(256 256) scale(.86) translate(-256 -290)">  <!-- étincelles -->
+  <g stroke-linecap="round" stroke-width="13">
+    <path d="M226 276 L186 268" stroke="#d6483a"/>
+    <path d="M228 250 L196 224" stroke="#f4b234"/>
+    <path d="M244 226 L230 190" stroke="#d6483a"/>
+  </g>
+  <!-- enclume -->
+  <path fill="#171e2e" d="M104 300 C150 302 178 296 196 290 L404 290 L404 330 L358 330 C336 340 326 356 326 372 L356 384 L356 408 L182 408 L182 384 L212 372 C212 356 202 340 180 330 C148 324 120 316 104 300 Z"/>
+  <!-- marteau -->
+  <g transform="translate(296 288) rotate(-28)">
+    <rect x="22" y="-60" width="170" height="26" rx="13" fill="#d6483a"/>
+    <rect x="-34" y="-86" width="68" height="84" rx="9" fill="#171e2e"/>
+  </g></g></svg>
