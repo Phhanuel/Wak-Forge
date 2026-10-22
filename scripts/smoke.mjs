@@ -1,7 +1,7 @@
 // Test du site dans un vrai navigateur (Chromium via Playwright), en français et en anglais.
 // Usage : node scripts/smoke.mjs [url]   (le site doit être servi, ex. npm run serve)
 // Vérifie : aucune erreur JavaScript, import d'un lien de liste, liste de courses, overlay (choix de liste,
-// onglet Fabrication) et, en anglais, qu'aucun texte de l'interface ne reste sans traduction.
+// onglet Fabrication), alerte des plans et, en anglais, qu'aucun texte de l'interface ne reste sans traduction.
 import { chromium } from 'playwright';
 import { existsSync, readFileSync } from 'node:fs';
 import { encodeShare } from '../web/js/craftcore.js';
@@ -48,8 +48,24 @@ async function run(lang) {
     check(await page.locator('#overlay .ovl-list li').count() > 0, `[${lang}] overlay : étapes de fabrication`);
   } else check(false, `[${lang}] overlay : onglet Fabrication absent`);
 
+  // Plans : un objet qui demande un plan est signalé ; le cocher dans l'onglet Plans enlève l'alerte.
+  // (autre adresse : la page se recharge, ce qui ferme l'overlay)
+  await page.goto(`${base}?lang=${lang}&plan=1#liste=${encodeShare('Test plan', [{ id: 19890, qte: 1 }])}`); // Kokordon
+  await page.waitForSelector('#craftSteps li', { timeout: 15000 }).catch(() => {});
+  check(await page.locator('#craftSteps .plan-tag.miss').count() > 0, `[${lang}] plans : alerte « plan requis »`);
+  await page.click('#craftSummary [data-goto-plans]').catch(() => {});
+  await page.waitForSelector('#planList .plan-row', { timeout: 5000 }).catch(() => {});
+  const tick = page.locator('#planList .plan-row input[data-plan-own]').first();
+  check(await tick.count() > 0, `[${lang}] plans : onglet Plans filtré sur la liste`);
+  if (await tick.count()) {
+    await tick.check();
+    await page.click('[data-view="craft"]');
+    await page.waitForSelector('#craftSteps .plan-tag.ok', { timeout: 5000 }).catch(() => {});
+    check(await page.locator('#craftSteps .plan-tag.ok').count() > 0, `[${lang}] plans : plan coché = plus d'alerte`);
+  }
+
   if (lang === 'en') {
-    for (const v of ['timers', 'monsters', 'settings']) await page.click(`[data-view="${v}"]`).catch(() => {});
+    for (const v of ['timers', 'monsters', 'plans', 'settings']) await page.click(`[data-view="${v}"]`).catch(() => {});
     const missing = await page.evaluate(() => import('./js/i18n.js').then(m => m.missingKeys()));
     check(!missing.length, `[en] textes traduits${missing.length ? ` (manquants : ${missing.slice(0, 5).join(' | ')})` : ''}`);
   }

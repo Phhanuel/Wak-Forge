@@ -1,7 +1,7 @@
 // Onglets « Craft » (liste de courses) et « Bestiaire » + fiche objet.
 import { norm, escapeHtml } from './util.js';
 import { t, tn, isEn, locale, jobName, rarityLabel, monsterTypeName, trapActionName } from './i18n.js';
-import { buildIndex, computeList, costIndex, searchItems, sourcesOf, mainRecipe, monsterItemIds, encodeShare, decodeShare, RARITY_CLASS } from './craftcore.js';
+import { buildIndex, computeList, costIndex, searchItems, sourcesOf, mainRecipe, missingPlans, monsterItemIds, encodeShare, decodeShare, RARITY_CLASS } from './craftcore.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const fmtN = n => Number(n).toLocaleString(locale);
@@ -57,6 +57,7 @@ function toEnglish(dItem, dRes, dBest, en) {
     for (const d of [...(m.drops || []), ...(m.trappeur?.items || [])]) if (!d.id && d.nom_en) d.nom = d.nom_en;
   }
   for (const o of [...(dItem?.items || []), ...(dRes?.ressources || [])]) {
+    o.nomFr = o.nom; o.typeFr = o.type; // les plans sont reliés à leur objet par le nom français
     if (o.nom_en) [o.nom, o.nom_en] = [o.nom_en, o.nom];
     o.type = tr(en.types, o.type);
     if (en.stats?.[o.id]) o.stats = en.stats[o.id];
@@ -81,7 +82,7 @@ async function ensureData(viewId) {
   } catch (e) {
     load.innerHTML = `${t('Impossible de charger les données du jeu ({err}).', { err: escapeHtml(e.message) })}<br>
       <button class="btn small" type="button">${t('Réessayer')}</button>`;
-    load.querySelector('button').onclick = () => ensureData(viewId).then(ok => ok && (viewId === 'view-craft' ? renderCraft() : renderMonsters()));
+    load.querySelector('button').onclick = () => ensureData(viewId).then(ok => ok && ({ 'view-craft': renderCraft, 'view-plans': renderPlans }[viewId] || renderMonsters)());
     return false;
   }
 }
@@ -118,6 +119,16 @@ const myJobs = () => ctx?.jobs?.() || {};
 function tooLow(metier, niveau) {
   const l = myJobs()[metier];
   return l != null && l < niveau ? l : null;
+}
+// Plans déjà appris (onglet Plans) ; planTag : rappel sur une fabrication qui demande un plan.
+const myPlans = () => ctx?.plans?.() || {};
+function planTag(id, { action = true } = {}) {
+  const p = IDX.planOf.get(id);
+  if (!p) return '';
+  const plan = IDX.byId.get(p);
+  if (myPlans()[p]) return `<span class="plan-tag ok" title="${escapeHtml(t('Plan appris : {nom}', { nom: plan.nom }))}">📜 ✓</span>`;
+  return `<span class="plan-tag miss"><button class="link" type="button" data-item="${p}" title="${escapeHtml(t('Il faut avoir appris {nom} : voir où le trouver', { nom: plan.nom }))}">📜 ${t('Plan requis')}</button>`
+    + `${action ? ` · <button class="link" type="button" data-plan-own="${p}" title="${t('Je l\'ai déjà appris')}">${t('je l\'ai')}</button>` : ''}</span>`;
 }
 
 /* Regroupement des ressources à réunir (au choix, mémorisé sur l'appareil) :
@@ -232,7 +243,7 @@ export async function renderCraft() {
     const o = IDX.byId.get(tg.id);
     const r = mainRecipe(o);
     return `<div class="target" data-id="${o.id}">
-      <div class="t-main">${itemLabel(o)}<div class="s-meta">${escapeHtml(o.type)} · ${t('Niv. {n}', { n: o.niveau })} · ${jobIcon(r.metier, '')} ${escapeHtml(jobName(r.metier))} ${r.niveau}</div></div>
+      <div class="t-main">${itemLabel(o)}<div class="s-meta">${escapeHtml(o.type)} · ${t('Niv. {n}', { n: o.niveau })} · ${jobIcon(r.metier, '')} ${escapeHtml(jobName(r.metier))} ${r.niveau} ${planTag(o.id, { action: false })}</div></div>
       <div class="stepper"><button type="button" data-step="-1" aria-label="${t('Moins')}">−</button>
         <input type="number" min="1" max="9999" value="${tg.qte}" data-qte aria-label="${t('Quantité')}">
         <button type="button" data-step="1" aria-label="${t('Plus')}">+</button></div>
@@ -250,6 +261,7 @@ export async function renderCraft() {
   const left = toBuy.reduce((sum, b) => sum + (prix[b.id] || 0) * b.missing, 0);
   const jobs = Object.entries(res.jobs).sort((a, b) => b[1] - a[1]);
   const lowCrafts = res.crafts.filter(x => x.runs > 0 && tooLow(x.recipe.metier, x.recipe.niveau) != null).length;
+  const plansLeft = missingPlans(IDX, res.crafts, myPlans()).length;
   $('#craftSummary').innerHTML = `
     <div class="stat"><b>${res.base.length}</b><span>${t('ressources')}</span></div>
     <div class="stat"><b>${missingCount}</b><span>${t('encore à réunir')}</span></div>
@@ -260,7 +272,8 @@ export async function renderCraft() {
       const cls = mine == null ? '' : mine < l ? ' low' : ' ok';
       return `<button class="chip job${cls}" type="button" data-job="${escapeHtml(j)}" title="${mine == null ? t('Clique pour indiquer ton niveau') : t('Ton niveau : {n}. Clique pour le changer', { n: mine })}">${jobIcon(j, '')} ${escapeHtml(jobName(j))} ${l}${mine != null && mine < l ? ` <span class="mine">· ${t('toi {n}', { n: mine })}</span>` : mine != null ? ' ✓' : ''}</button>`;
     }).join('')}${lowCrafts ? `<span class="jobs-warn">🔒 ${tn(lowCrafts, '{n} fabrication au-dessus de ton niveau', '{n} fabrications au-dessus de ton niveau')}</span>`
-      : !Object.keys(myJobs()).length ? `<span class="jobs-hint">${t('Clique sur un métier pour indiquer ton niveau.')}</span>` : ''}</div>`;
+      : !Object.keys(myJobs()).length ? `<span class="jobs-hint">${t('Clique sur un métier pour indiquer ton niveau.')}</span>` : ''}${plansLeft
+      ? `<button class="jobs-warn link" type="button" data-goto-plans title="${t('Voir les plans dans l\'onglet Plans')}">📜 ${tn(plansLeft, '{n} plan à obtenir', '{n} plans à obtenir')}</button>` : ''}</div>`;
 
   // ressources
   const hideDone = $('#craftHideDone').checked;
@@ -309,7 +322,7 @@ export async function renderCraft() {
     const low = x.runs > 0 ? tooLow(x.recipe.metier, x.recipe.niveau) : null;
     return `<li class="${x.runs === 0 ? 'done' : ''}${low != null ? ' locked' : ''}" data-id="${x.id}">
       <span class="job"${low != null ? ` title="${escapeHtml(t('Tu es {job} niveau {n} : il te faut le niveau {lvl} (ou acheter l\'objet)', { job: jobName(x.recipe.metier), n: low, lvl: x.recipe.niveau }))}"` : ''}>${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(jobName(x.recipe.metier))} ${x.recipe.niveau}${low != null ? ` <span class="lvl-low">🔒 ${t('toi {n}', { n: low })}</span>` : ''}</span>
-      <span class="what">${x.runs > 0 ? `<b>${fmtN(x.runs)}×</b>` : '<b>✓</b>'} ${itemLabel(o)}${yieldQ > 1 ? ` <span class="muted small">${t('({n} par fabrication)', { n: yieldQ })}</span>` : ''}
+      <span class="what">${x.runs > 0 ? `<b>${fmtN(x.runs)}×</b>` : '<b>✓</b>'} ${itemLabel(o)}${x.runs > 0 ? planTag(x.id) : ''}${yieldQ > 1 ? ` <span class="muted small">${t('({n} par fabrication)', { n: yieldQ })}</span>` : ''}
         ${x.have ? `<span class="muted small">· ${t('{n} déjà en stock', { n: fmtN(x.have) })}</span>` : ''}${cmp}</span>
       <span class="step-actions">
         <input class="have" type="number" min="0" value="${c.stock[x.id] || 0}" data-have title="${t('Déjà en stock')}" aria-label="${t('Déjà en stock')}">
@@ -449,6 +462,7 @@ function bindCraft() {
     renderCraft();
   });
   $('#craftSummary').addEventListener('click', e => {
+    if (e.target.closest('[data-goto-plans]')) { planFilter('list'); return; }
     const chip = e.target.closest('[data-job]');
     if (!chip) return;
     const j = chip.dataset.job;
@@ -586,12 +600,94 @@ export function showMonster(name) {
   ctx.showView('monsters');
 }
 
+/* ------------------------------------------------------------ plans */
+
+const planCheck = (p, label = t('Je l\'ai appris')) => `<label class="check plan-own"><input type="checkbox" data-plan-own="${p}"${myPlans()[p] ? ' checked' : ''}> ${label}</label>`;
+const planOfId = id => IDX.plans.find(p => p.id === id);
+function planUnlocks(p) {
+  const [first, ...rest] = p.items.map(i => IDX.byId.get(i));
+  const r = mainRecipe(first);
+  return `${itemLabel(first)}${rest.map(o => `<button class="item-link alt" type="button" data-item="${o.id}" title="${escapeHtml(`${o.nom} · ${rarityName(o.rarete)}`)}">${itemIcon(o)}</button>`).join('')}`
+    + ` <span class="chip">${jobIcon(r.metier, '🔨')} ${escapeHtml(jobName(r.metier))} ${r.niveau}</span>`;
+}
+/** Encadré de la fiche objet : plan nécessaire pour cet objet, ou objets que ce plan débloque. */
+function planSection(o) {
+  const p = IDX.planOf.get(o.id);
+  if (p) return `<p class="plan-box${myPlans()[p] ? ' ok' : ''}">📜 ${t('Se fabrique après avoir appris')} ${itemLabel(IDX.byId.get(p))} ${planCheck(p)}</p>`;
+  const plan = planOfId(o.id);
+  if (plan) return `<p class="plan-box${myPlans()[o.id] ? ' ok' : ''}">📜 ${t('Débloque la recette :')} ${planUnlocks(plan)} ${planCheck(o.id)}</p>`;
+  return '';
+}
+
+let planLimit = 60;
+/** Onglet Plans : tous les plans du jeu, à cocher quand on les a appris. */
+export async function renderPlans() {
+  if (!(await ensureData('view-plans'))) return;
+  const q = norm($('#planSearch').value);
+  const filter = $('#planFilter').value;
+  const owned = myPlans();
+  const c = ctx.getCraft();
+  const res = computeList(IDX, c.cibles, { stock: c.stock, buy: c.acheter });
+  const forList = new Set(res.crafts.filter(x => x.runs > 0).map(x => IDX.planOf.get(x.id)).filter(Boolean));
+  let list = IDX.plans.map(p => ({ ...p, o: IDX.byId.get(p.id) }));
+  if (q) list = list.filter(p => [p.id, ...p.items].some(i => { const o = IDX.byId.get(i); return o._key.includes(q) || o._keyEn?.includes(q); }));
+  if (filter === 'list') list = list.filter(p => forList.has(p.id));
+  else if (filter === 'missing') list = list.filter(p => !owned[p.id]);
+  else if (filter === 'owned') list = list.filter(p => owned[p.id]);
+  list.sort((a, b) => forList.has(b.id) - forList.has(a.id) || !!owned[a.id] - !!owned[b.id] || a.o._key.localeCompare(b.o._key));
+  const nOwned = IDX.plans.filter(p => owned[p.id]).length;
+  $('#planCount').textContent = `${tn(list.length, '{n} plan', '{n} plans', { n: fmtN(list.length) })} · ${t('{a} appris sur {b}', { a: nOwned, b: IDX.plans.length })}`;
+  $('#planList').innerHTML = list.slice(0, planLimit).map(p => {
+    const drops = [...(p.o.drops || [])].sort((a, b) => (b.taux ?? 0) - (a.taux ?? 0));
+    return `<div class="plan-row${owned[p.id] ? ' owned' : ''}" data-id="${p.id}">
+      <label class="plan-tick" title="${t('Je l\'ai appris')}"><input type="checkbox" data-plan-own="${p.id}"${owned[p.id] ? ' checked' : ''} aria-label="${escapeHtml(t('{nom} : appris', { nom: p.o.nom }))}"></label>
+      <div class="plan-main">
+        <div>${itemLabel(p.o)}${forList.has(p.id) ? ` <span class="tag ${owned[p.id] ? 'perso' : 'custom'}">${t('dans ta liste')}</span>` : ''}</div>
+        <div class="plan-unlocks"><span class="muted small">${t('Débloque :')}</span> ${planUnlocks(p)}</div>
+      </div>
+      <div class="srcs">${drops.slice(0, 3).map(d => srcHtml({ kind: 'drop', ...d })).join('')}${drops.length > 3 ? `<span class="src more">+${drops.length - 3} ${escapeHtml(t('monstres'))}</span>` : ''}${!drops.length ? `<span class="muted small">${t('provenance inconnue (quête, boutique, marché…)')}</span>` : ''}</div>
+    </div>`;
+  }).join('') || `<p class="empty-small">${filter === 'list' && !forList.size ? t('Aucune fabrication de ta liste ne demande de plan.') : t('Aucun plan ne correspond.')}</p>`;
+  $('#planMore').hidden = list.length <= planLimit;
+}
+function planFilter(v) {
+  $('#planSearch').value = '';
+  $('#planFilter').value = v;
+  planLimit = 60;
+  ctx.showView('plans');
+}
+function setPlan(id, v) {
+  ctx.setPlan(id, v);
+  if (!$('#view-craft').hidden) renderCraft(); else renderOverlay();
+  if (!$('#view-plans').hidden) renderPlans();
+  if ($('#itemDlg').open) { const sc = $('#itemDlg').scrollTop; openItem(itemShown).then(() => { $('#itemDlg').scrollTop = sc; }); }
+  ctx.toast(v ? t('Plan noté comme appris : {nom}', { nom: escapeHtml(IDX.byId.get(id).nom) }) : t('Plan retiré : {nom}', { nom: escapeHtml(IDX.byId.get(id).nom) }), v ? 'ok' : '');
+}
+function bindPlans() {
+  let tmr;
+  $('#planSearch').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(() => { planLimit = 60; renderPlans(); }, 120); });
+  $('#planFilter').addEventListener('change', () => { planLimit = 60; renderPlans(); });
+  $('#planMore').addEventListener('click', () => { planLimit += 100; renderPlans(); });
+  // cases « appris » (onglet Plans, fiche objet) et boutons « je l'ai » (étapes de fabrication)
+  document.addEventListener('change', e => {
+    const el = e.target.closest('input[data-plan-own]');
+    if (el) setPlan(+el.dataset.planOwn, el.checked);
+  });
+  document.addEventListener('click', e => {
+    const el = e.target.closest('button[data-plan-own]');
+    if (el) setPlan(+el.dataset.planOwn, true);
+  });
+}
+
 /* ------------------------------------------------------------ fiche objet */
+
+let itemShown = null;
 
 export async function openItem(id) {
   await loadGamedata();
   const o = IDX.byId.get(id);
   if (!o) return;
+  itemShown = id;
   const dlg = $('#itemDlg');
   const r = mainRecipe(o);
   const used = [...(IDX.usedIn.get(id) || [])].map(x => IDX.byId.get(x)).filter(Boolean)
@@ -607,6 +703,7 @@ export async function openItem(id) {
         <p class="muted small">${escapeHtml(o.type)} · ${t('Niveau {n}', { n: o.niveau })}${o.nom_en ? ` · <i>${escapeHtml(o.nom_en)}</i>` : ''}</p>
       </div>
     </div>
+    ${planSection(o)}
     ${o.stats?.length ? `<div class="stats">${o.stats.map(s => `<span>${escapeHtml(s)}</span>`).join('')}</div>` : ''}
     ${(o.recettes || []).map(rec => `<section><h4>${jobIcon(rec.metier, '🔨')} ${t('Recette')} · ${escapeHtml(jobName(rec.metier))} ${rec.niveau}${rec.amelioration ? ` · ${t('amélioration')}` : ''}${rec.quantite > 1 ? ` · ${t('donne {n}', { n: rec.quantite })}` : ''}</h4>
       <ul class="drops">${rec.ingredients.map(([iid, q]) => `<li>${itemLabel(IDX.byId.get(iid))}<span class="rate">× ${q}</span></li>`).join('')}</ul></section>`).join('')}
@@ -632,6 +729,7 @@ export function initCraft(context) {
   ctx = context;
   bindCraft();
   bindMonsters();
+  bindPlans();
   // liens objet / monstre partout dans l'appli
   document.addEventListener('click', e => {
     const it = e.target.closest('[data-item]');
@@ -826,7 +924,7 @@ export function renderOverlay() {
     return `<li class="${done ? 'done' : ''}${low != null ? ' locked' : ''}" data-id="${x.id}" data-need="${x.need}">
         ${itemIcon(o, { size: 42 })}
         <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(o.nom)}">${done ? '' : `<b>${fmtN(x.runs)}×</b> `}${escapeHtml(o.nom)}</div>
-          <div class="ovl-src">${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(jobName(x.recipe.metier))} ${x.recipe.niveau}${low != null ? ` · 🔒 ${t('toi {n}', { n: low })}` : ''}</div></div>
+          <div class="ovl-src">${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(jobName(x.recipe.metier))} ${x.recipe.niveau}${low != null ? ` · 🔒 ${t('toi {n}', { n: low })}` : ''}${!done && IDX.planOf.get(x.id) && !myPlans()[IDX.planOf.get(x.id)] ? ` · 📜 ${t('plan requis')}` : ''}</div></div>
         ${qty(c.stock[x.id] || 0, x.need)}
         ${doneBtn(done)}
       </li>`;

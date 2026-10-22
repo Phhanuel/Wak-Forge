@@ -3,12 +3,12 @@ import {
 } from './util.js';
 import { createSync } from './sync.js';
 import { t as tr, tn, isEn, lang, setLang, translateDom, jobName } from './i18n.js';
-import { initCraft, renderCraft, renderMonsters, gamedataInfo, monsterPortrait, overlayOpen, handleScan, decodeShare } from './craft.js';
+import { initCraft, renderCraft, renderMonsters, renderPlans, gamedataInfo, monsterPortrait, overlayOpen, handleScan, decodeShare } from './craft.js';
 
 /** Portrait de l'archimonstre (wakfu.wiki.gg), ou son initiale s'il n'y en a pas. */
 const archiPortrait = (m, px, cls) => monsterPortrait({ image: m?.image, nom: m?.name }, { px, cls: `archi ${cls}` });
 
-const APP_VERSION = '2.18.0';
+const APP_VERSION = '2.19.0';
 const STORE_KEY = 'archimonstres.state.v1';
 const DEVICE_KEY = 'archimonstres.device.v1';
 const $ = (s, r = document) => r.querySelector(s);
@@ -65,6 +65,7 @@ function defaultState() {
     listeActive: 'l1',
     prix: {},       // id -> prix unitaire en kamas (commun à toutes les listes)
     metiers: {},    // métier -> niveau du joueur
+    plans: {},      // id du plan -> true : plans déjà appris
     settings: defaultSettings(),
     updatedAt: 0,
   };
@@ -118,6 +119,7 @@ function sanitizeState(raw) {
     const n = Math.round(+v);
     if (JOBS.includes(m) && n > 0) s.metiers[m] = Math.min(n, 300);
   }
+  for (const [id, v] of Object.entries(raw.plans || {})) if (+id > 0 && v) s.plans[+id] = true;
   const st = raw.settings || {};
   s.settings = {
     sound: st.sound !== false,
@@ -849,6 +851,7 @@ function showView(name) {
   if (name === 'settings') { renderSettings(); renderBestiary(); }
   if (name === 'craft') renderCraft().then(() => { const i = $('#craftSearch'); if (i && !matchMedia('(max-width: 760px)').matches) i.focus(); renderGameSource(); });
   if (name === 'monsters') renderMonsters();
+  if (name === 'plans') renderPlans();
   try { sessionStorage.setItem('archimonstres.view', name); } catch { /* rien */ }
   if (name === 'timers') setTimeout(() => search.focus(), 0);
 }
@@ -1012,6 +1015,7 @@ function mergeInto(other) {
   addMissingLists(other);
   Object.assign(state.prix, other.prix);
   for (const [m, v] of Object.entries(other.metiers)) state.metiers[m] = Math.max(state.metiers[m] || 0, v);
+  Object.assign(state.plans, other.plans);
 }
 
 /** Remplace le contenu de la liste active. */
@@ -1075,9 +1079,9 @@ function addMissingLists(other) {
 $('#resetBtn').addEventListener('click', () => {
   if (!confirm(tr('Effacer tous tes timers, durées perso et archimonstres ajoutés ?') + (sync.user ? `\n${tr('Cela s\'applique aussi à ton compte.')}` : ''))) return;
   const settings = state.settings;
-  const { craft, listes, listeActive, prix, metiers } = state;
+  const { craft, listes, listeActive, prix, metiers, plans } = state;
   state = defaultState();
-  Object.assign(state, { settings, craft, listes, listeActive, prix, metiers });
+  Object.assign(state, { settings, craft, listes, listeActive, prix, metiers, plans });
   refreshCatalog(); persist(); persistDevice();
   renderTimers(true); renderBestiary();
   toast(tr('Tout a été effacé.'));
@@ -1199,6 +1203,7 @@ function applyRemote(remote, merge) {
     addMissingLists(local);
     for (const [id, v] of Object.entries(local.prix)) if (!state.prix[id]) state.prix[id] = v;
     for (const [m, v] of Object.entries(local.metiers)) state.metiers[m] = Math.max(state.metiers[m] || 0, v);
+    Object.assign(state.plans, local.plans);
     state.updatedAt = Date.now();
     markPastAsNotified();
     refreshCatalog();
@@ -1212,6 +1217,7 @@ function applyRemote(remote, merge) {
   renderTimers(true);
   if (!$('#view-settings').hidden) { renderSettings(); renderBestiary(); }
   if (!$('#view-craft').hidden || overlayOpen()) renderCraft();
+  if (!$('#view-plans').hidden) renderPlans();
 }
 
 /* =================================================================== toasts */
@@ -1338,6 +1344,11 @@ async function main() {
       if (n) state.metiers[m] = n; else delete state.metiers[m];
       persist();
       renderJobSettings();
+    },
+    plans: () => state.plans,
+    setPlan: (id, v) => {
+      if (v) state.plans[id] = true; else delete state.plans[id];
+      persist();
     },
     importShared,
     shareBase: () => (native.on || location.protocol === 'file:' ? (window.ARCHI_CONFIG?.siteUrl || SITE_URL) : location.origin + location.pathname),
