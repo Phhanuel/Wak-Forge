@@ -21,11 +21,40 @@
     569, 570, 571, 574, 575, 576, 577, 578,     // composants
   ]);
   const ACTIONS_TRAPPEUR = { Extract: 'Extraire', Harvest: 'Récolter', 'Harvest (restes)': 'Récolter (restes)', Restes: 'Restes' };
+  // Objets PvP : ceux qu'on améliore avec les jetons PvP (Médaille de Bravoure, Galon déchiré),
+  // leurs versions de base, et les équipements de la même série qui ne se lâchent ni ne se fabriquent
+  // (achetés directement contre ces jetons).
+  const JETONS_PVP = [24705, 24706];
+  const SERIES_PVP = [[19242, 19252], [24380, 24707]];
   const WIKI_TYPE = { Monster: 'Monstre', Boss: 'Boss', 'Ultimate Boss': 'Boss ultime', Archmonster: 'Archimonstre', Dominant: 'Dominant' };
 
   const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[’`´]/g, "'").toLowerCase().replace(/\s+/g, ' ').trim();
   const plain = s => String(s ?? '').replace(/\{[^{}]*\}/g, '').replace(/\s+/g, ' ').trim();
+
+  /** Ajoute pvp: true aux objets PvP (voir JETONS_PVP). Modifie les objets en place, renvoie leur nombre. */
+  function markPvp(items, ressources = []) {
+    const byId = new Map([...items, ...ressources].map(o => [o.id, o]));
+    const pvp = new Set(JETONS_PVP.filter(id => byId.has(id)));
+    for (const o of items) {
+      for (const r of o.recettes || []) if (r.ingredients.some(([id]) => pvp.has(id))) pvp.add(o.id);
+    }
+    // version de base (même nom) dans une recette d'amélioration, de proche en proche
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const o of items) {
+        if (!pvp.has(o.id)) continue;
+        for (const r of o.recettes || []) for (const [id] of r.ingredients) {
+          if (!pvp.has(id) && byId.get(id)?.nom === o.nom) { pvp.add(id); grew = true; }
+        }
+      }
+    }
+    for (const o of items) {
+      if (o.stats && !o.drops && !o.recettes && !o.recolte && SERIES_PVP.some(([a, b]) => o.id >= a && o.id <= b)) pvp.add(o.id);
+    }
+    for (const id of pvp) byId.get(id).pvp = true;
+    return pvp.size;
+  }
 
   async function getJson(url, tries = 4) {
     for (let i = 0; ; i++) {
@@ -453,6 +482,7 @@
       if (!o.nom) continue;
       (TYPES_RESSOURCE.has(o.typeId) ? ressources : items).push(finalize(o));
     }
+    const nbPvp = markPvp(items, ressources);
     const bestiaire = [...monsters.values()]
       .filter(m => m.nom)
       .sort((a, b) => (a.niveau_min ?? 9999) - (b.niveau_min ?? 9999) || a.nom.localeCompare(b.nom));
@@ -461,7 +491,7 @@
     const sourceCdn = `Données officielles du jeu (CDN Ankama, version ${version})`;
     const sourceWiki = 'Wakfu Wiki – wakfu.wiki.gg (CC BY-SA 4.0)';
     const meta = { version_jeu: version, maj, raretes: RARETES };
-    log(`${items.length} objets, ${ressources.length} ressources, ${nbRecettes} recettes, ${bestiaire.length} monstres, ${nbDrops} drops`);
+    log(`${items.length} objets, ${ressources.length} ressources, ${nbRecettes} recettes, ${bestiaire.length} monstres, ${nbDrops} drops, ${nbPvp} objets PvP`);
     if (unmatched.size) log(`${unmatched.size} noms du wiki sans objet correspondant (gardés en anglais)`);
 
     const out = {
@@ -490,7 +520,7 @@
     return out;
   }
 
-  const api = { buildGamedata, applyFrenchNames, englishFromTable, renderTemplate, effValue, RARETES };
+  const api = { buildGamedata, markPvp, applyFrenchNames, englishFromTable, renderTemplate, effValue, RARETES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.WakfuGamedata = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

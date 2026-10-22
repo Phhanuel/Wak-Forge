@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildIndex, computeList, costIndex, mainRecipe, missingPlans, encodeShare, decodeShare } from '../web/js/craftcore.js';
+import { buildIndex, computeList, costIndex, searchItems, mainRecipe, missingPlans, encodeShare, decodeShare } from '../web/js/craftcore.js';
 
 // Mini jeu de données : A = 2 B + 1 C (produit 1) ; B = 3 C (produit 2) ; C et D sont des ressources.
 const item = (id, nom, recettes) => ({ id, nom, nom_en: '', niveau: 1, rarete: 0, type: 'Test', ...(recettes ? { recettes } : {}) });
@@ -104,4 +104,19 @@ test('lien de partage : aller-retour et liens invalides', () => {
   assert.deepEqual(decodeShare(code), back, 'le code seul suffit');
   assert.equal(decodeShare('https://wakforge.github.io/'), null);
   assert.equal(decodeShare('#liste=pas-du-json-du-tout'), null);
+});
+
+test('recherche : option pour masquer les objets PvP', () => {
+  const idx = buildIndex({ items: [{ ...item(1, 'La Bienveillante'), pvp: true }, item(2, 'La Bienveillante du Bouftou')] });
+  assert.deepEqual(searchItems(idx, 'bienveillante').map(o => o.id), [1, 2]);
+  assert.deepEqual(searchItems(idx, 'bienveillante', { hidePvp: true }).map(o => o.id), [2]);
+});
+
+test('données réelles : objets PvP repérés', () => {
+  const read = f => JSON.parse(readFileSync(new URL(`../web/data/${f}`, import.meta.url), 'utf8'));
+  const items = read('data_item.json').items;
+  const pvp = items.filter(o => o.pvp);
+  assert.ok(pvp.length > 250, `${pvp.length} objets PvP`);
+  assert.ok(pvp.some(o => o.nom === 'La Bienveillante'));
+  assert.ok(!items.find(o => o.id === 2021).pvp); // Amulette du Bouftou
 });

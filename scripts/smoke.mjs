@@ -1,7 +1,7 @@
 // Test du site dans un vrai navigateur (Chromium via Playwright), en français et en anglais.
 // Usage : node scripts/smoke.mjs [url]   (le site doit être servi, ex. npm run serve)
 // Vérifie : aucune erreur JavaScript, import d'un lien de liste, liste de courses, overlay (choix de liste,
-// onglet Fabrication), alerte des plans et, en anglais, qu'aucun texte de l'interface ne reste sans traduction.
+// onglet Fabrication), alerte des plans, badge et filtre PvP et, en anglais, qu'aucun texte de l'interface ne reste sans traduction.
 import { chromium } from 'playwright';
 import { existsSync, readFileSync } from 'node:fs';
 import { encodeShare } from '../web/js/craftcore.js';
@@ -63,6 +63,20 @@ async function run(lang) {
     await page.waitForSelector('#craftSteps .plan-tag.ok', { timeout: 5000 }).catch(() => {});
     check(await page.locator('#craftSteps .plan-tag.ok').count() > 0, `[${lang}] plans : plan coché = plus d'alerte`);
   }
+
+  // PvP : badge dans la recherche, et option pour masquer ces objets.
+  await page.click('[data-view="craft"]').catch(() => {});
+  await page.fill('#craftSearch', lang === 'en' ? 'watchmin' : 'bienveillante');
+  await page.waitForSelector('#craftSuggest li', { timeout: 5000 }).catch(() => {});
+  check(await page.locator('#craftSuggest .pvp-tag').count() > 0, `[${lang}] PvP : badge dans la recherche`);
+  await page.check('#craftHidePvp');
+  await page.focus('#craftSearch');
+  await page.fill('#craftSearch', lang === 'en' ? 'watchmi' : 'bienveillant');
+  await page.waitForSelector('#craftSuggest li.s-note', { timeout: 5000 }).catch(() => {});
+  check(await page.locator('#craftSuggest .pvp-tag').count() === 0 && await page.locator('#craftSuggest li.s-note').count() === 1,
+    `[${lang}] PvP : objets masqués de la recherche`);
+  await page.uncheck('#craftHidePvp');
+  await page.fill('#craftSearch', '');
 
   if (lang === 'en') {
     for (const v of ['timers', 'monsters', 'plans', 'settings']) await page.click(`[data-view="${v}"]`).catch(() => {});
