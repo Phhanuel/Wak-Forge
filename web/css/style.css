@@ -643,6 +643,7 @@ body.overlay-mode, body.ovl-pip { overflow: hidden; }
 .ovl-list .ico { width: 26px; height: 26px; flex: none; }
 .ovl-main { flex: 1; min-width: 0; }
 .ovl-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ovl-name .pvp-tag { font-size: 10.5px; padding: 0 5px; margin-left: 4px; }
 .ovl-src { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ovl-src .job-ico { width: 13px; height: 13px; vertical-align: -2px; }
 .ovl-qty { display: flex; align-items: center; gap: 2px; flex: none; }

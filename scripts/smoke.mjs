@@ -76,6 +76,10 @@ async function run(lang) {
   check(await page.locator('#craftSuggest .pvp-tag').count() === 0 && await page.locator('#craftSuggest li.s-note').count() === 1,
     `[${lang}] PvP : objets masqués de la recherche`);
   await page.uncheck('#craftHidePvp');
+  // badge aussi dans les ressources à réunir (La Bienveillante légendaire : Médaille de Bravoure, Galon déchiré)
+  await page.goto(`${base}?lang=${lang}&pvp=1#liste=${encodeShare('Test PvP', [{ id: 24674, qte: 1 }])}`);
+  await page.waitForSelector('#craftBase .pvp-tag', { timeout: 15000 }).catch(() => {});
+  check(await page.locator('#craftBase .pvp-tag').count() >= 2, `[${lang}] PvP : badge dans les ressources à réunir`);
   await page.fill('#craftSearch', '');
 
   if (lang === 'en') {

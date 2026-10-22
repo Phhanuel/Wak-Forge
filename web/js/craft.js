@@ -301,7 +301,7 @@ export async function renderCraft() {
     const vs = mk != null && p ? (mk < p ? ` · <span class="cheaper">${t('fabriquer : {k}/u, moins cher', { k: fmtK(mk) })}</span>` : ` · ${mkTxt}`)
       : mk != null ? ` · ${mkTxt}` : '';
     return `<tr class="${b.missing > 0 ? '' : 'done'}" data-id="${b.id}">
-      <td class="name">${itemLabel(b.o)}<div class="sub">${t('Niv. {n}', { n: b.o.niveau })} · ${escapeHtml(rarityName(b.o.rarete))}${bought ? ` · <button class="link" type="button" data-craft-again>${t('fabriquer à nouveau')}</button>` : ''}${vs}</div></td>
+      <td class="name">${itemLabel(b.o)}${pvpTag(b.o)}<div class="sub">${t('Niv. {n}', { n: b.o.niveau })} · ${escapeHtml(rarityName(b.o.rarete))}${bought ? ` · <button class="link" type="button" data-craft-again>${t('fabriquer à nouveau')}</button>` : ''}${vs}</div></td>
       <td class="num"><b>${fmtN(b.need)}</b></td>
       <td class="num"><input class="have" type="number" min="0" value="${c.stock[b.id] || 0}" data-have aria-label="${t('J\'en ai')}"></td>
       <td class="num ${b.missing > 0 ? 'miss' : 'ok'}">${b.missing > 0 ? fmtN(b.missing) : '✓'}</td>
@@ -328,7 +328,7 @@ export async function renderCraft() {
     const low = x.runs > 0 ? tooLow(x.recipe.metier, x.recipe.niveau) : null;
     return `<li class="${x.runs === 0 ? 'done' : ''}${low != null ? ' locked' : ''}" data-id="${x.id}">
       <span class="job"${low != null ? ` title="${escapeHtml(t('Tu es {job} niveau {n} : il te faut le niveau {lvl} (ou acheter l\'objet)', { job: jobName(x.recipe.metier), n: low, lvl: x.recipe.niveau }))}"` : ''}>${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(jobName(x.recipe.metier))} ${x.recipe.niveau}${low != null ? ` <span class="lvl-low">🔒 ${t('toi {n}', { n: low })}</span>` : ''}</span>
-      <span class="what">${x.runs > 0 ? `<b>${fmtN(x.runs)}×</b>` : '<b>✓</b>'} ${itemLabel(o)}${x.runs > 0 ? planTag(x.id) : ''}${yieldQ > 1 ? ` <span class="muted small">${t('({n} par fabrication)', { n: yieldQ })}</span>` : ''}
+      <span class="what">${x.runs > 0 ? `<b>${fmtN(x.runs)}×</b>` : '<b>✓</b>'} ${itemLabel(o)}${pvpTag(o)}${x.runs > 0 ? planTag(x.id) : ''}${yieldQ > 1 ? ` <span class="muted small">${t('({n} par fabrication)', { n: yieldQ })}</span>` : ''}
         ${x.have ? `<span class="muted small">· ${t('{n} déjà en stock', { n: fmtN(x.have) })}</span>` : ''}${cmp}</span>
       <span class="step-actions">
         <input class="have" type="number" min="0" value="${c.stock[x.id] || 0}" data-have title="${t('Déjà en stock')}" aria-label="${t('Déjà en stock')}">
@@ -919,7 +919,7 @@ export function renderOverlay() {
     const srcs = sourcesOf(b.o).filter(s => !(s.kind === 'recette' && !c.acheter[b.id])).slice(0, 2).map(srcShort).filter(Boolean);
     return `<li class="${done ? 'done' : ''}" data-id="${b.id}" data-need="${b.need}">
         ${itemIcon(b.o, { size: 42 })}
-        <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(b.o.nom)}">${escapeHtml(b.o.nom)}</div>
+        <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(b.o.nom)}">${escapeHtml(b.o.nom)}${pvpTag(b.o)}</div>
           <div class="ovl-src">${srcs.join(' · ') || t('marché')}</div></div>
         <div class="ovl-qty">
           <button type="button" data-dec title="${t('−1 (Maj : −10)')}" aria-label="${t('Moins')}">−</button>
@@ -936,7 +936,7 @@ export function renderOverlay() {
     const low = done ? null : tooLow(x.recipe.metier, x.recipe.niveau);
     return `<li class="${done ? 'done' : ''}${low != null ? ' locked' : ''}" data-id="${x.id}" data-need="${x.need}">
         ${itemIcon(o, { size: 42 })}
-        <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(o.nom)}">${done ? '' : `<b>${fmtN(x.runs)}×</b> `}${escapeHtml(o.nom)}</div>
+        <div class="ovl-main"><div class="ovl-name" title="${escapeHtml(o.nom)}">${done ? '' : `<b>${fmtN(x.runs)}×</b> `}${escapeHtml(o.nom)}${pvpTag(o)}</div>
           <div class="ovl-src">${jobIcon(x.recipe.metier, '🔨')} ${escapeHtml(jobName(x.recipe.metier))} ${x.recipe.niveau}${low != null ? ` · 🔒 ${t('toi {n}', { n: low })}` : ''}${!done && IDX.planOf.get(x.id) && !myPlans()[IDX.planOf.get(x.id)] ? ` · 📜 ${t('plan requis')}` : ''}</div></div>
         ${qty(c.stock[x.id] || 0, x.need)}
         ${doneBtn(done)}
