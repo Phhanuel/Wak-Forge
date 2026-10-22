@@ -51,7 +51,7 @@ async function run(lang) {
   // Plans : un objet qui demande un plan est signalé ; le cocher dans l'onglet Plans enlève l'alerte.
   // (autre adresse : la page se recharge, ce qui ferme l'overlay)
   await page.goto(`${base}?lang=${lang}&plan=1#liste=${encodeShare('Test plan', [{ id: 19890, qte: 1 }])}`); // Kokordon
-  await page.waitForSelector('#craftSteps li', { timeout: 15000 }).catch(() => {});
+  await page.waitForSelector('#craftSteps li[data-id="19890"] .plan-tag', { timeout: 15000 }).catch(() => {});
   check(await page.locator('#craftSteps .plan-tag.miss').count() > 0, `[${lang}] plans : alerte « plan requis »`);
   await page.click('#craftSummary [data-goto-plans]').catch(() => {});
   await page.waitForSelector('#planList .plan-row', { timeout: 5000 }).catch(() => {});
