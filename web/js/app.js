@@ -1178,6 +1178,12 @@ function accountView(mode = 'login', msg = null) {
 
 $('#accountBtn').addEventListener('click', () => { accountView('login'); $('#accountDlg').showModal(); });
 
+// Lien de téléchargement de l'appli PC (masqué dans l'appli elle-même) : rappel de l'alerte Windows au clic.
+$('#downloadBtn').hidden = native.on;
+$('#downloadBtn').addEventListener('click', () => {
+  toast(tr('<b>Windows va afficher une alerte</b>, c\'est normal : l\'exe n\'est pas signé. Si le navigateur bloque le téléchargement : <b>⋯ → Conserver</b>. Au lancement : <b>Informations complémentaires → Exécuter quand même</b> (une seule fois).'), 'warn', 15000);
+});
+
 function applyRemote(remote, merge) {
   const r = sanitizeState(remote);
   if (merge) {

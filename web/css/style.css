@@ -90,6 +90,9 @@ kbd {
 .sync-dot[data-state="sync"] { background: var(--info); animation: pulse 1s infinite; }
 .sync-dot[data-state="error"] { background: var(--danger); }
 #accountLabel { overflow: hidden; text-overflow: ellipsis; }
+.dl-btn { text-decoration: none; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.dl-btn:hover { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.dl-btn svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
 main { max-width: 1180px; margin: 0 auto; padding: 26px 16px 80px; }
 
@@ -284,8 +287,6 @@ main { max-width: 1180px; margin: 0 auto; padding: 26px 16px 80px; }
 }
 .setting h3 { margin: 0 0 2px; font-size: 16px; }
 .setting p { margin: 0; color: var(--text-3); font-size: 14px; }
-.setting p.smartscreen { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--text-2); }
-.setting p.smartscreen b { color: var(--text); }
 .setting-ctl { display: flex; align-items: center; gap: 10px; flex: none; }
 .setting.danger h3 { color: var(--danger); }
 .setting.block { display: grid; gap: 12px; }
@@ -495,6 +496,7 @@ input.have::placeholder { color: var(--text-3); }
   .brand-sub { display: block; font-size: 10.5px; letter-spacing: .8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .brand > div { min-width: 0; }
   .account { margin-left: auto; max-width: 150px; padding: 6px 11px; }
+  .dl-btn:not([hidden]) + .account { margin-left: 0; }
   .empty .keys { display: none; }
   .tabs { order: 3; width: 100%; margin: 0; }
   .tabs { overflow-x: auto; scrollbar-width: none; }
@@ -583,6 +585,7 @@ h4 .job-ico { width: 20px; height: 20px; vertical-align: -5px; }
 @media (max-width: 480px) {
   #accountLabel { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .account { padding: 10px; }
+  .dl-label { display: none; }
 }
 
 /* ---------------- overlay (liste de courses compacte) */
