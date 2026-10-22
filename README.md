@@ -15,7 +15,7 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 </details>
 
 > 🇬🇧 **English** – Wak'Forge is also available in English: [wakforge.github.io/?lang=en](https://wakforge.github.io/?lang=en) (or Settings → Langue · Language).
-> Pick the items you want to craft and get **every base resource to gather**, intermediate recipes included, with where to find each one (harvest, trapper, monster drops). Tick them off as you go, in an **overlay** that stays on top of the game. Also: a full **bestiary** with drops, **archmonster timers**, shareable lists, market prices and profession levels.
+> Pick the items you want to craft and get **every base resource to gather**, intermediate recipes included, with where to find each one (harvest, trapper, monster drops). Tick them off as you go, in an **overlay** that stays on top of the game. Also: a full **bestiary** with drops, **archmonster timers**, shareable lists, market prices, profession levels and blueprints you have learned.
 > Website (browser, mobile, installable) or standalone **Windows app**: [download `WakForge.exe`](https://github.com/wakforge/wakforge.github.io/releases/latest/download/WakForge.exe) (Windows warns because the exe is not signed: *More info → Run anyway*). Free community fan project, not affiliated with Ankama.
 
 ## Fonctionnalités
@@ -27,6 +27,7 @@ Avec un compte, tes timers et ta liste se synchronisent en direct entre tous tes
 - **Plusieurs listes** : garde une liste par projet (« Panoplie 200 », « Reroll »…) et passe de l'une à l'autre avec les onglets au-dessus de la recherche. Double-clic sur l'onglet (ou ✎) pour renommer, × pour supprimer. Chaque liste a ses objectifs et ses quantités « j'ai ».
 - **Partager une liste** : le bouton **Partager** copie un lien vers la liste. La personne qui l'ouvre peut l'importer en un clic (dans l'appli PC, colle le lien dans la recherche). Rien n'est envoyé à un serveur : la liste est dans le lien.
 - **Mes métiers** : indique tes niveaux dans **Réglages** (ou clique sur un métier sous les objectifs). Les fabrications et les récoltes au-dessus de ton niveau sont marquées 🔒.
+- **Plans** : les objets qui ne se fabriquent qu'après avoir appris un plan (« Plan "Kokordon" »…) sont marqués 📜 **Plan requis** dans les étapes de fabrication, avec le nombre de plans à obtenir sous les objectifs. L'onglet **Plans** liste tous les plans du jeu, l'objet qu'ils débloquent et les monstres qui les droppent : coche ceux que tu as déjà appris pour ne plus être alerté.
 - **Classement des ressources** : par niveau, par **provenance** (métier de récolte ou famille de monstre) ou par **monstre** (pour farmer plusieurs ressources sur le même), au choix. Le choix s'applique aussi à l'overlay.
 - **English version** : Réglages → Langue (ou `?lang=en` dans l'adresse). Interface, noms des objets et des monstres, types et effets en anglais ; la recherche marche dans les deux langues.
 - **Overlay** : le bouton **⧉ Overlay** de la liste de courses ouvre une version compacte qui reste par-dessus le jeu. On y coche ce qu'on récolte au fur et à mesure (+1, Maj + clic : +10), et tout reste synchronisé avec la liste complète.

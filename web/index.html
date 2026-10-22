@@ -37,6 +37,7 @@
     </div>
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" class="tab" data-view="craft" aria-selected="true">Craft</button>
+      <button role="tab" class="tab" data-view="plans" aria-selected="false">Plans</button>
       <button role="tab" class="tab" data-view="monsters" aria-selected="false">Bestiaire</button>
       <button role="tab" class="tab" data-view="timers" aria-selected="false">Timers <span class="tab-badge" id="readyBadge" hidden>0</span></button>
       <button role="tab" class="tab" data-view="settings" aria-selected="false">Réglages</button>
@@ -148,6 +149,22 @@
           </div>
         </div>
         <p class="muted small source" id="craftSource"></p>
+      </div>
+    </section>
+
+    <!-- ============ PLANS ============ -->
+    <section class="view" id="view-plans" hidden>
+      <p class="loading">Chargement des données du jeu…</p>
+      <div class="view-body" hidden>
+        <div class="toolbar">
+          <input id="planSearch" type="search" placeholder="Plan ou objet (ex. Kokordon)" aria-label="Rechercher un plan">
+          <select id="planFilter" aria-label="Plans affichés">
+            <option value="">Tous les plans</option><option value="list">Utiles pour ma liste</option><option value="missing">À obtenir</option><option value="owned">Déjà appris</option>
+          </select>
+        </div>
+        <p class="muted small"><span id="planCount"></span> · <span>coche les plans que tu as déjà appris : la liste de craft ne signale plus que ceux qui te manquent.</span></p>
+        <div id="planList" class="plan-list"></div>
+        <button class="btn more-btn" type="button" id="planMore" hidden>Afficher plus</button>
       </div>
     </section>
 

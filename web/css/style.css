@@ -437,6 +437,27 @@ input.have::placeholder { color: var(--text-3); }
 
 /* ---------------- monstres */
 .toolbar select { height: 44px; padding: 0 10px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); color: var(--text); flex: none; max-width: 40%; }
+.plan-tag { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.plan-tag.miss, .plan-tag.miss .link { color: var(--warn); }
+.plan-tag.ok { color: var(--ok); font-weight: 500; }
+.plan-tag .link { font-size: inherit; font-weight: inherit; }
+button.jobs-warn { color: var(--warn); }
+.plan-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; padding: 9px 12px; border-radius: var(--radius-sm);
+  background: var(--warn-soft); border: 1px solid rgba(242, 201, 76, .35); font-size: 14px; }
+.plan-box.ok { background: var(--ok-soft); border-color: rgba(79, 209, 139, .35); }
+.plan-own { margin-left: auto; }
+.plan-list { display: grid; gap: 8px; }
+.plan-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px 14px;
+  padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.plan-row.owned { opacity: .62; }
+.plan-tick input { width: 20px; height: 20px; accent-color: var(--ok); cursor: pointer; }
+.plan-unlocks { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; }
+.plan-unlocks .item-link.alt .ico { width: 28px; height: 28px; }
+.plan-row .srcs { justify-content: flex-end; }
+@media (max-width: 760px) {
+  .plan-row { grid-template-columns: auto minmax(0, 1fr); }
+  .plan-row .srcs { grid-column: 2; justify-content: flex-start; }
+}
 .mlist { display: grid; gap: 8px; }
 .mcard { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .mcard.open { border-color: var(--border-strong); }

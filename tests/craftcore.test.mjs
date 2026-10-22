@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildIndex, computeList, costIndex, mainRecipe, encodeShare, decodeShare } from '../web/js/craftcore.js';
+import { buildIndex, computeList, costIndex, mainRecipe, missingPlans, encodeShare, decodeShare } from '../web/js/craftcore.js';
 
 // Mini jeu de données : A = 2 B + 1 C (produit 1) ; B = 3 C (produit 2) ; C et D sont des ressources.
 const item = (id, nom, recettes) => ({ id, nom, nom_en: '', niveau: 1, rarete: 0, type: 'Test', ...(recettes ? { recettes } : {}) });
@@ -66,6 +66,34 @@ test('données réelles : chaque recette pointe vers des objets connus', () => {
   assert.ok(missing.length < idx.craftables.length * 0.01, `ingrédients inconnus : ${missing.slice(0, 5).join(', ')}`);
   const res = computeList(idx, [{ id: 2023, qte: 1 }]); // Boufbottes
   assert.ok(res.base.length > 0 && res.crafts.some(x => x.id === 2023));
+});
+
+test('plans : reliés à l\'objet du même nom, Souvenir à part', () => {
+  const plan = (id, nom) => ({ ...item(id, nom), type: 'Recette' });
+  const sv = (id, nom) => ({ ...item(id, nom, [recipe([[3, 1]])]), rarete: 6 });
+  const idx = buildIndex({ items: [
+    item(1, 'Objet A', [recipe([[2, 2], [3, 1]])]),
+    item(2, 'Composant B', [recipe([[3, 3]], 2)]),
+    sv(6, 'Objet A'),
+    plan(10, 'Plan "Objet A"'), plan(11, 'Plan "Objet A" (Souvenir)'), plan(12, 'Plan "Introuvable"'),
+  ] }, { ressources: [item(3, 'Ressource C')] }, { monstres: [] });
+  assert.equal(idx.planOf.get(1), 10);
+  assert.equal(idx.planOf.get(6), 11, 'l\'objet Souvenir demande le plan Souvenir');
+  assert.equal(idx.planOf.get(2), undefined);
+  assert.deepEqual(idx.plans.map(p => p.id), [10, 11], 'un plan sans objet est ignoré');
+  const res = computeList(idx, [{ id: 1, qte: 1 }]);
+  assert.deepEqual(missingPlans(idx, res.crafts), [{ id: 10, items: [1] }]);
+  assert.deepEqual(missingPlans(idx, res.crafts, { 10: true }), [], 'plan déjà possédé');
+  assert.deepEqual(missingPlans(idx, computeList(idx, [{ id: 1, qte: 1 }], { stock: { 1: 1 } }).crafts), [], 'objet déjà fabriqué');
+});
+
+test('données réelles : les plans du jeu sont presque tous reliés', () => {
+  const read = f => JSON.parse(readFileSync(new URL(`../web/data/${f}`, import.meta.url), 'utf8'));
+  const dItem = read('data_item.json');
+  const idx = buildIndex(dItem, read('data_ressource.json'), read('data_bestiaire.json'));
+  const total = dItem.items.filter(o => o.type === 'Recette').length;
+  assert.ok(idx.plans.length >= total * 0.9, `${idx.plans.length} plans reliés sur ${total}`);
+  assert.ok(idx.planOf.has(19890), 'Kokordon demande son plan');
 });
 
 test('lien de partage : aller-retour et liens invalides', () => {

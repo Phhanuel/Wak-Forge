@@ -27,13 +27,61 @@ export function buildIndex(dItem, dRes, dBest) {
     ...m, _i: i, _key: norm(`${m.nom} ${m.nom_en || ''}`), _extra: norm([m.famille, ...(m.zones || [])].join(' ')),
   }));
   const raretes = dItem?.raretes || dRes?.raretes || {};
+  const { plans, planOf } = linkPlans(all);
   return {
-    byId, usedIn, monsters, raretes,
+    byId, usedIn, monsters, raretes, plans, planOf,
     craftables: all.filter(o => o.recettes?.length),
     searchable: all,
     version: dItem?.version_jeu || '',
     maj: dItem?.maj || '',
   };
+}
+
+/* Plans : objets de type « Recette » (« Plan "Kokordon" ») qui s'apprennent une fois et débloquent la recette
+ * de l'objet du même nom. Les données du jeu ne relient pas le plan à l'objet : on les relie par le nom français
+ * (nomFr / typeFr : noms d'origine gardés quand l'interface passe en anglais), plus quelques cas à la main. */
+const PLAN_ALIAS = {
+  15992: [16074], // Recette du Casque d'Hazieff -> Casque Hazieff
+  20415: [20416], // Recette des Petits Sâblés -> Petits Sâblés
+  28820: [28777, 28778, 28779, 28780], // Plan "Trônes de nation" -> les quatre trônes
+};
+const SOUVENIR = 6;
+/** @returns { plans: [{ id, items: [id] }], planOf: Map(id de l'objet -> id du plan) } */
+export function linkPlans(all) {
+  const frName = o => o.nomFr ?? o.nom;
+  const byName = new Map();
+  for (const o of all) {
+    if (!o.recettes?.length) continue;
+    const k = norm(frName(o));
+    if (!byName.has(k)) byName.set(k, []);
+    byName.get(k).push(o);
+  }
+  const found = [];
+  for (const p of all) {
+    if ((p.typeFr ?? p.type) !== 'Recette') continue;
+    const name = norm(frName(p));
+    const souvenir = /\(souvenir\)$/.test(name);
+    const target = name.replace(/\s*\(souvenir\)$/, '').replace(/^(plan\s+|recette\s+(du|des|de la|de|d')\s*)/, '').replace(/^"|"$/g, '').trim();
+    const items = PLAN_ALIAS[p.id] ? PLAN_ALIAS[p.id].filter(id => all.some(o => o.id === id && o.recettes?.length))
+      : (byName.get(target) || []).filter(o => !souvenir || o.rarete === SOUVENIR).map(o => o.id);
+    if (items.length) found.push({ id: p.id, items, souvenir });
+  }
+  const planOf = new Map();
+  // le plan « Souvenir » passe avant le plan normal pour les objets Souvenir
+  for (const p of [...found].sort((a, b) => b.souvenir - a.souvenir)) for (const id of p.items) if (!planOf.has(id)) planOf.set(id, p.id);
+  return { plans: found.map(({ id }) => ({ id, items: [...planOf].filter(([, pid]) => pid === id).map(([i]) => i) })).filter(p => p.items.length), planOf };
+}
+
+/** Plans à apprendre pour une liste : [{ id (du plan), items: [ids des fabrications concernées] }], plans possédés exclus. */
+export function missingPlans(index, crafts, owned = {}) {
+  const out = new Map();
+  for (const x of crafts) {
+    const p = x.runs > 0 && index.planOf?.get(x.id);
+    if (!p || owned[p]) continue;
+    if (!out.has(p)) out.set(p, { id: p, items: [] });
+    out.get(p).items.push(x.id);
+  }
+  return [...out.values()];
 }
 
 /** Recette utilisée par défaut : la première qui n'est pas une amélioration. */
