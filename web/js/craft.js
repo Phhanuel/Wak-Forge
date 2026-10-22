@@ -136,6 +136,11 @@ function planTag(id, { action = true } = {}) {
 const GROUP_KEY = 'wakforge.craftGroup';
 let groupMode = 'niveau';
 try { groupMode = localStorage.getItem(GROUP_KEY) || 'niveau'; } catch { /* rien */ }
+// Objets PvP (achetés ou améliorés avec des jetons PvP) : badge, et option pour les masquer de la recherche.
+const PVP_KEY = 'wakforge.hidePvp';
+let hidePvp = false;
+try { hidePvp = localStorage.getItem(PVP_KEY) === '1'; } catch { /* rien */ }
+const pvpTag = o => (o?.pvp ? `<span class="pvp-tag" title="${escapeHtml(t('Objet PvP : s\'achète ou s\'améliore avec des jetons PvP (Médaille de Bravoure, Galon déchiré)'))}">⚔ PvP</span>` : '');
 function monsterGroup(name) {
   const m = monsterByName(name);
   return { key: `m:${name}`, html: `<button class="link" type="button" data-monster="${escapeHtml(name)}" title="${t('Voir le monstre')}">${m?.image ? monsterPortrait(m, { px: 40, cls: 'mini' }) : '⚔'} ${escapeHtml(name)}</button>` };
@@ -199,15 +204,16 @@ let suggIdx = -1;
 function renderCraftSuggest() {
   const input = $('#craftSearch');
   const box = $('#craftSuggest');
-  sugg = searchItems(IDX, input.value, { limit: 10 });
+  sugg = searchItems(IDX, input.value, { limit: 10, hidePvp });
+  const hidden = hidePvp ? searchItems(IDX, input.value, { limit: 400 }).filter(o => o.pvp).length : 0;
   box.innerHTML = sugg.map((o, i) => {
     const r = mainRecipe(o);
     const meta = [o.type, t('Niv. {n}', { n: o.niveau }), rarityName(o.rarete)].filter(Boolean).join(' · ');
     const chip = r ? `<span class="chip">${jobIcon(r.metier, '🔨')} ${escapeHtml(jobName(r.metier))} ${r.niveau}</span>` : `<span class="chip unknown">${t('non fabricable')}</span>`;
     return `<li role="option" data-i="${i}" aria-selected="${i === suggIdx}">
-      <div class="s-main"><div class="s-name">${itemLabel(o, { link: false })}</div><div class="s-meta">${escapeHtml(meta)}</div></div>${chip}</li>`;
-  }).join('');
-  const open = sugg.length > 0 && document.activeElement === input;
+      <div class="s-main"><div class="s-name">${itemLabel(o, { link: false })}${pvpTag(o)}</div><div class="s-meta">${escapeHtml(meta)}</div></div>${chip}</li>`;
+  }).join('') + (hidden ? `<li class="s-note muted small" aria-disabled="true">${tn(hidden, '{n} objet PvP masqué', '{n} objets PvP masqués')}</li>` : '');
+  const open = (sugg.length > 0 || hidden > 0) && document.activeElement === input;
   box.hidden = !open;
   box.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
 }
@@ -243,7 +249,7 @@ export async function renderCraft() {
     const o = IDX.byId.get(tg.id);
     const r = mainRecipe(o);
     return `<div class="target" data-id="${o.id}">
-      <div class="t-main">${itemLabel(o)}<div class="s-meta">${escapeHtml(o.type)} · ${t('Niv. {n}', { n: o.niveau })} · ${jobIcon(r.metier, '')} ${escapeHtml(jobName(r.metier))} ${r.niveau} ${planTag(o.id, { action: false })}</div></div>
+      <div class="t-main">${itemLabel(o)}${pvpTag(o)}<div class="s-meta">${escapeHtml(o.type)} · ${t('Niv. {n}', { n: o.niveau })} · ${jobIcon(r.metier, '')} ${escapeHtml(jobName(r.metier))} ${r.niveau} ${planTag(o.id, { action: false })}</div></div>
       <div class="stepper"><button type="button" data-step="-1" aria-label="${t('Moins')}">−</button>
         <input type="number" min="1" max="9999" value="${tg.qte}" data-qte aria-label="${t('Quantité')}">
         <button type="button" data-step="1" aria-label="${t('Plus')}">+</button></div>
@@ -456,6 +462,13 @@ function bindCraft() {
     ctx.saveCraft(); renderCraft();
   });
   $('#craftHideDone').addEventListener('change', renderCraft);
+  $('#craftHidePvp').checked = hidePvp;
+  $('#craftHidePvp').addEventListener('change', e => {
+    hidePvp = e.target.checked;
+    try { localStorage.setItem(PVP_KEY, hidePvp ? '1' : '0'); } catch { /* rien */ }
+    suggIdx = -1;
+    renderCraftSuggest();
+  });
   $('#craftGroup').addEventListener('change', e => {
     groupMode = e.target.value;
     try { localStorage.setItem(GROUP_KEY, groupMode); } catch { /* rien */ }
@@ -699,7 +712,7 @@ export async function openItem(id) {
       ${itemIcon(o, { size: 115, cls: 'big' })}
       <div>
         <span class="rar-badge ${RARITY_CLASS[o.rarete] || 'commun'}">${escapeHtml(rarityName(o.rarete))}</span>
-        <h2>${escapeHtml(o.nom)}</h2>
+        <h2>${escapeHtml(o.nom)}${pvpTag(o)}</h2>
         <p class="muted small">${escapeHtml(o.type)} · ${t('Niveau {n}', { n: o.niveau })}${o.nom_en ? ` · <i>${escapeHtml(o.nom_en)}</i>` : ''}</p>
       </div>
     </div>

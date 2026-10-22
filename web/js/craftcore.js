@@ -91,12 +91,13 @@ export function mainRecipe(o) {
 }
 
 /** Recherche d'objets : nom FR, puis nom EN. */
-export function searchItems(index, query, { limit = 12, craftableOnly = false } = {}) {
+export function searchItems(index, query, { limit = 12, craftableOnly = false, hidePvp = false } = {}) {
   const q = norm(query);
   if (!q) return [];
   const out = [];
   const pool = craftableOnly ? index.craftables : index.searchable;
   for (const o of pool) {
+    if (hidePvp && o.pvp) continue;
     let s = -1;
     if (o._key === q) s = 0;
     else if (o._key.startsWith(q)) s = 1;

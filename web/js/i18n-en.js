@@ -419,4 +419,9 @@ export const EN = {
   "À obtenir": "To get",
   "Déjà appris": "Already learned",
   "coche les plans que tu as déjà appris : la liste de craft ne signale plus que ceux qui te manquent.": "tick the blueprints you have already learned: the craft list then only flags the ones you are missing.",
+  "Masquer PvP": "Hide PvP",
+  "Ne pas proposer les équipements PvP (achetés ou améliorés avec des jetons PvP) dans la recherche": "Do not suggest PvP gear (bought or upgraded with PvP tokens) in the search",
+  "Objet PvP : s'achète ou s'améliore avec des jetons PvP (Médaille de Bravoure, Galon déchiré)": "PvP item: bought or upgraded with PvP tokens (Medal of Bravery, Torn Braid)",
+  "{n} objet PvP masqué": "{n} PvP item hidden",
+  "{n} objets PvP masqués": "{n} PvP items hidden",
 };
